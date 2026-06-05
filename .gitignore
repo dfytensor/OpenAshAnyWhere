@@ -1,8 +1,8 @@
 .idea/
 __pycache__/
-train_60m/
-train_20m/
-minimind_data/
-models/
-experiment_openash_vs_wdlm/
 *.pyc
+*.pth
+*.pt
+*.jsonl
+open_ash_voc_agent.json
+vocabulary_nnn.json
