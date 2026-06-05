@@ -1,0 +1,8 @@
+.idea/
+__pycache__/
+train_60m/
+train_20m/
+minimind_data/
+models/
+experiment_openash_vs_wdlm/
+*.pyc
