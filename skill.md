@@ -253,7 +253,26 @@ python experiment_extrap_analysis/bench_oa_fix.py
 
 测试 OA-58M / OA-85M 加 state cap、decay、output cap 的效果。
 
-### 6.6 修复后推理性能检查
+### 6.6 Cap + Decay 组合方案
+
+```powershell
+python experiment_extrap_analysis/bench_combo_cap_decay.py
+```
+
+测试 cap-same / cap-200 + decay (0.99/0.97/0.95) 的组合效果，对比单独使用。
+三模型 (OA-58M, OA-85M, WM-60M) × 8 种干预方案。
+
+### 6.7 通用 Cap 扫描
+
+```powershell
+python experiment_extrap_analysis/bench_universal_cap.py
+```
+
+测试固定 cap 值 (50/100/150/200/300/500)、decay 值 (0.9~0.995)、cap+decay 组合、
+ratio-based cap (k*sqrt(H)) 的跨模型通用性。
+四组实验: 通用 cap 扫描 / decay 扫描 / cap=150+decay 组合 / ratio-based cap。
+
+### 6.8 修复后推理性能检查
 
 ```powershell
 python experiment_extrap_analysis/bench_inference_check.py
@@ -261,7 +280,7 @@ python experiment_extrap_analysis/bench_inference_check.py
 
 对比 baseline vs fixed 的生成速度、PPL、质量、样本输出。
 
-### 6.7 训练时集成 State Cap 验证
+### 6.9 训练时集成 State Cap 验证
 
 ```powershell
 python experiment_extrap_analysis/train_with_cap.py
