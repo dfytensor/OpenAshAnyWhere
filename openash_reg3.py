@@ -52,16 +52,23 @@ class LearnedGateRegister(nn.Module):
             if end.any():
                 qk = span_sum / span_cnt.clamp(min=1).unsqueeze(1)
                 bi_idx = end.nonzero().squeeze(-1)
-                pp_idx = ptr[bi_idx]
-                kk = v[bi_idx] * (1.0 + self.amp)
-                m0 = M[bi_idx, pp_idx]
-                s = torch.sigmoid(BETA * (kk - m0))
-                M_soft = m0 + s * (kk - m0)
-                M_hard = torch.maximum(m0, kk)
-                new_val = M_hard + (M_soft - M_hard).detach()
-                M = torch.index_put(M, (bi_idx, pp_idx), new_val)
-                K = torch.index_put(K, (bi_idx, pp_idx), qk[bi_idx])
-                ptr = torch.index_put(ptr, (bi_idx,), (ptr[bi_idx] + 1) % self.n_slots)
+                # 只写空槽: 找每个样本的第一个空槽; 全满则丢弃 (针永不覆盖)
+                occ = (K.norm(dim=-1) > 1e-6)                    # [B, K]
+                free = ~occ
+                write_mask = free.any(dim=-1)                     # [B]
+                bi_w = bi_idx[write_mask[bi_idx]]
+                if bi_w.numel() > 0:
+                    pp_idx = torch.zeros_like(bi_w)
+                    for oi, bbi in enumerate(bi_w.tolist()):
+                        pp_idx[oi] = free[bbi].nonzero()[0]
+                    kk = v[bi_w] * (1.0 + self.amp)
+                    m0 = M[bi_w, pp_idx]
+                    s = torch.sigmoid(BETA * (kk - m0))
+                    M_soft = m0 + s * (kk - m0)
+                    M_hard = torch.maximum(m0, kk)
+                    new_val = M_hard + (M_soft - M_hard).detach()
+                    M = torch.index_put(M, (bi_w, pp_idx), new_val)
+                    K = torch.index_put(K, (bi_w, pp_idx), qk[bi_w])
                 span_sum = torch.zeros_like(span_sum)
                 span_cnt = torch.zeros_like(span_cnt)
                 v = torch.zeros_like(v)

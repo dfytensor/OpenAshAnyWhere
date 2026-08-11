@@ -42,8 +42,11 @@ def main():
             X[i, :x.shape[0]] = x; Y[i, :y.shape[0]] = y; W[i, :w.shape[0]] = w
         with torch.autocast("cuda", dtype=torch.bfloat16):
             out, state = model(X)
-            loss = (F.cross_entropy(out.reshape(-1, out.shape[-1]), Y.reshape(-1),
-                                    reduction="none").view(BATCH, L) * W).sum() / W.sum()
+            ce = (F.cross_entropy(out.reshape(-1, out.shape[-1]), Y.reshape(-1),
+                                  reduction="none").view(BATCH, L) * W).sum() / W.sum()
+            g_raw = model.register.Wg(model.base.em(X)).squeeze(-1)
+            sparsity = torch.sigmoid(g_raw).mean()          # 门稀疏正则
+            loss = ce + 0.02 * sparsity
         opt.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
