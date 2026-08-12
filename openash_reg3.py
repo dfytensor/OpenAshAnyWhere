@@ -83,7 +83,9 @@ class LearnedGateRegister(nn.Module):
         qn = q / (q.norm(dim=-1, keepdim=True) + 1e-8)
         Kn = F.normalize(K, dim=-1)
         cos = torch.einsum("bd,bkd->bk", qn, Kn)
-        gate = torch.sigmoid(self.gamma * (cos - self.theta))
+        # 竞争读出: softmax 选槽 (针槽胜出, 其余抑制), 空槽掩掉
+        empty = (K.norm(dim=-1) > 1e-6).float()
+        gate = F.softmax(self.gamma * cos + (empty - 1) * 50.0, dim=-1)   # 空槽→-inf
         sig = torch.einsum("bk,bkd->bd", gate, M)
         inj = self.inject(sig).unsqueeze(1)
         return x_emb + inj, M, K

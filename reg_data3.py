@@ -14,48 +14,89 @@ ATTRS = {
     "喜欢的颜色": ["红", "黄", "蓝", "绿", "黑", "白", "紫"],
     "喜欢的动物": ["猫", "狗", "鸟", "鱼", "马", "牛"],
 }
+# 模板变体 (语义匹配): 事实/问题的多样化措辞
+FACT_TMPL = ["%s%s是%s", "%s%s是%s", "%s最爱的%s是%s", "%s偏好的%s是%s"]
+Q_TMPL = ["%s%s是什么", "%s%s是多少", "%s%s是什么%s"]
 
 
 def make_encoder():
     return OpenASHVoc(agent_voc_path=r"F:\OpenASH2605\open_ash_voc_agent.json")
 
 
-def build_needle_sample(enc, seqs, max_len=256, rng=None):
-    """一个无标记事实插入真实文本中部, 尾部提问. 返回 (tokens, v_pos, vid)."""
+def fact_str(name, attr, val, rng):
+    t = rng.choice(FACT_TMPL)
+    if t.count("%s") == 3:
+        return t % (name, attr, val)
+    return t % (name, attr, val)
+
+
+def q_str(name, attr, rng):
+    t = rng.choice(Q_TMPL)
+    if t.count("%s") == 3:
+        return t % (name, attr, attr.replace("喜欢的", ""))
+    return t % (name, attr)
+
+
+def build_needle_sample(enc, seqs, max_len=256, n_fact=1, rng=None):
+    """n_fact 个无标记事实 (不同人名) 插入真实文本, 尾部提问其中一个.
+    返回 (tokens, v_pos, vid, fact_mask): fact_mask 标记事实 span 位置 (监督门)."""
     if rng is None:
         rng = random
-    name = rng.choice(NAMES)
-    attr = rng.choice(list(ATTRS))
-    val = rng.choice(ATTRS[attr])
-    fact = enc.encode("%s%s是%s" % (name, attr, val))
-    q = enc.encode("%s%s是什么" % (name, attr))
-    ans = enc.encode("答案是%s" % val)
+    n_fact = rng.randint(1, n_fact)
+    names = rng.sample(NAMES, n_fact)
+    facts = []
+    for nm in names:
+        attr = rng.choice(list(ATTRS))
+        val = rng.choice(ATTRS[attr])
+        facts.append((nm, attr, val))
+    ask = rng.randrange(n_fact)
+    nm_q, attr_q, val_q = facts[ask]
+    fact_toks = [enc.encode(fact_str(nm, a, v, rng)) for nm, a, v in facts]
+    q = enc.encode(q_str(nm_q, attr_q, rng))
+    ans = enc.encode("答案是%s" % val_q)
     tail = [QUESTION] + q + ans
     seq = seqs[rng.randrange(len(seqs))]
-    L = min(seq.shape[0], max_len - len(fact) - 6 - len(tail))
-    if L < 10:
-        L = 10
-    base = seq[:L].tolist()
-    pos = rng.randrange(0, max(1, L - len(fact)))
-    tokens = base[:pos] + fact + base[pos:]
+    span = max(6, (max_len - len(tail) - 20) // (n_fact + 1))
+    base = seq[:min(seq.shape[0], (n_fact + 1) * span)].tolist()
+    tokens = []
+    mask = []
+    for i, f in enumerate(fact_toks):
+        seg = base[i * span:(i + 1) * span]
+        tokens += seg
+        mask += [0] * len(seg)
+        tokens += f
+        mask += [1] * len(f)
+    seg = base[n_fact * span:]
+    tokens += seg
+    mask += [0] * len(seg)
     tokens = (tokens + tail)[:max_len]
+    mask = (mask + [0] * len(tail))[:max_len]
     v_pos = len(tokens) - 1
-    return tokens, v_pos, enc.encode(val)[0]
+    return tokens, v_pos, enc.encode(val_q)[0], mask
 
 
-def build_needle_eval(enc, seqs, gap, rng=None):
-    """针(无标记事实)到提问的 gap 距离."""
+def build_needle_eval(enc, seqs, gap, n_fact=1, rng=None):
+    """针(无标记事实)到提问的 gap 距离; n_fact>1 时前放其他事实."""
     if rng is None:
         rng = random
-    name = rng.choice(NAMES)
-    attr = rng.choice(list(ATTRS))
-    val = rng.choice(ATTRS[attr])
-    fact = enc.encode("%s%s是%s" % (name, attr, val))
-    q = enc.encode("%s%s是什么" % (name, attr))
-    ans = enc.encode("答案是%s" % val)
+    n_fact = rng.randint(1, n_fact)
+    names = rng.sample(NAMES, n_fact)
+    facts = []
+    for nm in names:
+        attr = rng.choice(list(ATTRS))
+        val = rng.choice(ATTRS[attr])
+        facts.append((nm, attr, val))
+    ask = rng.randrange(n_fact)
+    nm_q, attr_q, val_q = facts[ask]
     pre = []
-    for _ in range(rng.randint(1, 3)):
-        pre += seqs[rng.randrange(len(seqs))][:64].tolist()
+    for i, (nm, attr, val) in enumerate(facts):
+        if i == ask:
+            continue
+        pre += enc.encode(fact_str(nm, attr, val, rng))
+        pre += seqs[rng.randrange(len(seqs))][:48].tolist()
+    fact = enc.encode(fact_str(nm_q, attr_q, val_q, rng))
+    q = enc.encode(q_str(nm_q, attr_q, rng))
+    ans = enc.encode("答案是%s" % val_q)
     filler = []
     need = gap
     while need > 0:
@@ -65,4 +106,4 @@ def build_needle_eval(enc, seqs, gap, rng=None):
         need -= take
     tokens = pre + fact + filler + [QUESTION] + q + ans
     v_pos = len(tokens) - 1
-    return tokens, v_pos, enc.encode(val)[0]
+    return tokens, v_pos, enc.encode(val_q)[0]
