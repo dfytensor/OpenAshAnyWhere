@@ -85,11 +85,14 @@ class OpenASHReg(nn.Module):
         return out, state
 
 
-def build_reg_model(ckpt_path):
-    """加载 768x12 OpenASH checkpoint, 套上寄存器."""
-    from open_ash import OpenASH
+def build_reg_model(ckpt_path, stable=False, R=10.0):
+    """加载 768x12 OpenASH checkpoint, 套上寄存器 (stable=True 用范数cap基座)."""
+    if stable:
+        from openash_stable import OpenASHStable
+        base = OpenASHStable(voc_size=23005, hidden_size=768, num_heads=8, num_layers=12, R=R)
+    else:
+        from open_ash import OpenASH
+        base = OpenASH(voc_size=23005, hidden_size=768, num_heads=8, num_layers=12)
     sd = torch.load(ckpt_path, map_location="cpu", weights_only=True)
-    model = OpenASH(voc_size=23005, hidden_size=768, num_heads=8, num_layers=12)
-    model.load_state_dict(sd, strict=False)
-    model = OpenASHReg(model)
-    return model
+    base.load_state_dict(sd, strict=False)
+    return OpenASHReg(base)
