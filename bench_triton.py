@@ -23,28 +23,41 @@ def bench(fn, n=100, warm=20):
 def main():
     torch.manual_seed(7)
 
-    # ==== 1) 训练步 ====
+    # ==== 1) 训练步: 最优配方梯度叠加 ====
     m = OpenASH(voc_size=23005, hidden_size=768, num_heads=8, num_layers=12).to(DEV)
-    opt = torch.optim.AdamW(m.parameters(), lr=1e-4)
     x = torch.randint(2, 23004, (8, 256), device=DEV)
     y = torch.randint(2, 23004, (8, 256), device=DEV)
     import types
+    ce = torch.nn.functional.cross_entropy
+
+    def t0_step():
+        out, _ = m(x)
+        loss = ce(out.reshape(-1, 23005), y.reshape(-1))
+        m_opt.zero_grad(set_to_none=True); loss.backward(); m_opt.step()
+
+    m_opt = torch.optim.AdamW(m.parameters(), lr=1e-4)
+    t_base = bench(t0_step, n=30)
+
+    # 最优配方: fused AdamW + bf16 + fast forward + compile(max-autotune)
     fast_c = torch.compile(AT.max_state_super_fast, dynamic=False)
     def sa_fast(self, xx, state=None):
         return fast_c(self, xx, state)
-    def train_step():
-        out, _ = m(x)
-        loss = torch.nn.functional.cross_entropy(out.reshape(-1, 23005), y.reshape(-1))
-        opt.zero_grad(set_to_none=True); loss.backward(); opt.step()
-    t0 = bench(train_step, n=30)
     for layer in m.decoder_layers:
         layer.self_attention_linear.forward = types.MethodType(
             sa_fast, layer.self_attention_linear)
-    train_step()  # compile warmup
-    t1 = bench(train_step, n=30)
+    mc = torch.compile(m, dynamic=False, mode="max-autotune")
+    m_opt = torch.optim.AdamW(m.parameters(), lr=1e-4, fused=True)
+    def t1_step():
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            out, _ = mc(x)
+            loss = ce(out.reshape(-1, 23005), y.reshape(-1))
+        m_opt.zero_grad(set_to_none=True); loss.backward(); m_opt.step()
+    t1_step()  # compile warmup
+    t_fast = bench(t1_step, n=30)
     print("=== 训练步 (12层, B=8, S=256) ===")
-    print("原版: %.1f ms | einsum+compile: %.1f ms (%.2fx)" % (t0, t1, t0 / t1))
-    del m, opt
+    print("基线 fp32:                        %.1f ms" % t_base)
+    print("bf16+fused+compile(max-autotune): %.1f ms (%.2fx)" % (t_fast, t_base / t_fast))
+    del m, mc, m_opt
     torch.cuda.empty_cache()
 
     # ==== 2) 推理: 单步 + Graph + 解码 ====
