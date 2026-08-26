@@ -118,15 +118,14 @@ def convlinear_triton_v2(x, w_in, w_out, conv_weight, conv_bias=None):
 def _row_kernel(XP, KW, WOUT, BIAS, Y, rows,
                 SP: tl.constexpr, H: tl.constexpr, W: tl.constexpr, K: tl.constexpr,
                 BLOCK_H: tl.constexpr, BLOCK_W: tl.constexpr):
+    """逐元素 FMA 版 (对照)."""
     pid_row = tl.program_id(0)
     pid_h = tl.program_id(1)
     offs_h = pid_h * BLOCK_H + tl.arange(0, BLOCK_H)
     offs_w = tl.arange(0, BLOCK_W)
     mh = offs_h < H
     mw = offs_w < W
-
     base = pid_row * SP
-    # Σ_dh Kw[dh,w]·x[h+dh] : [BLOCK_H, BLOCK_W]
     sdh = tl.zeros([BLOCK_H, BLOCK_W], dtype=tl.float32)
     for dh in range(K):
         kw = tl.load(KW + dh * W + offs_w, mask=mw, other=0.)
@@ -138,3 +137,65 @@ def _row_kernel(XP, KW, WOUT, BIAS, Y, rows,
     wout = tl.load(WOUT + offs_w, mask=mw, other=0.)
     out = tl.sum(sdh * wout[None, :], axis=1)
     tl.store(Y + pid_row * H + offs_h, out, mask=mh)
+
+
+@triton.jit
+def _row_kernel_dot(XP, KW, WOUT, BIAS, Y,
+                    SP: tl.constexpr, H: tl.constexpr, W: tl.constexpr, K: tl.constexpr,
+                    BLOCK_H: tl.constexpr, BLOCK_W: tl.constexpr, BLOCK_K: tl.constexpr):
+    """GEMM 化: 两级 tl.dot (tensor core), 中间 tile 不物化.
+    阶段1: T[BLOCK_H, W] = A[BLOCK_H, K] @ Kw[K, W]  (K=3 pad 到 BLOCK_K)
+    阶段2: out[BLOCK_H] = relu(T + b) @ w_out         (K=W 的 GEMV)"""
+    pid_row = tl.program_id(0)
+    pid_h = tl.program_id(1)
+    offs_h = pid_h * BLOCK_H + tl.arange(0, BLOCK_H)
+    offs_k = tl.arange(0, BLOCK_K)
+    offs_w = tl.arange(0, BLOCK_W)
+    mh = offs_h < H
+    mk = offs_k < K
+    mw = offs_w < W
+    base = pid_row * SP
+
+    # A[BLOCK_H, BLOCK_K]: x[h + k]
+    a_ptrs = XP + base + offs_h[:, None] + offs_k[None, :]
+    A = tl.load(a_ptrs, mask=mh[:, None] & mk[None, :], other=0.0)
+    # Kw[BLOCK_K, W]
+    kW = tl.load(KW + offs_k[:, None] * W + offs_w[None, :],
+                 mask=mk[:, None] & mw[None, :], other=0.0)
+    # 阶段1 GEMM
+    T = tl.dot(A, kW)                                   # [BLOCK_H, BLOCK_W] fp32
+    # bias + relu
+    bias = tl.load(BIAS + offs_w, mask=mw, other=0.)
+    T = tl.maximum(T + bias[None, :], 0.0)
+    # 阶段2 GEMV: [BLOCK_H, W] @ [W]  -> 用 dot 需要 2D: [H, W] @ [W, 1]
+    w2 = tl.load(WOUT + offs_w, mask=mw, other=0.)
+    Wmat = w2[:, None]                                  # [BLOCK_W, 1]
+    out = tl.dot(T, Wmat)                               # [BLOCK_H, 1]
+    tl.store(Y + pid_row * H + offs_h, tl.ravel(out), mask=mh)
+
+
+def convlinear_triton_dot(x, w_in, w_out, conv_weight, conv_bias=None):
+    """GEMM 化 Triton 版 (两级 tl.dot)."""
+    b, s, h = x.shape
+    k = conv_weight.shape[-1]
+    p = k // 2
+    w = w_out.shape[0]
+    dev = x.device
+    K = conv_weight[0, 0].float()
+    win = w_in.float().reshape(-1)
+    idx = ((torch.arange(w, device=dev).view(1, -1)
+            + torch.arange(k, device=dev).view(-1, 1) - p) % w)
+    Kw = (K @ win[idx]).contiguous()                     # [k, w]
+    wout_c = w_out.float().reshape(-1).contiguous()
+    bias_c = (conv_bias.float().reshape(-1).contiguous()
+              if conv_bias is not None else torch.zeros(w, device=dev))
+    xp = torch.nn.functional.pad(x.float(), (p, p), mode="replicate").contiguous()
+    sp = h + 2 * p
+    y = torch.empty(b * s * h, device=dev, dtype=torch.float32)
+    BLOCK_H, BLOCK_W = 64, 128
+    grid = (b * s, triton.cdiv(h, BLOCK_H))
+    _row_kernel_dot[grid](xp, Kw, wout_c, bias_c, y,
+                          SP=sp, H=h, W=w, K=k,
+                          BLOCK_H=BLOCK_H, BLOCK_W=BLOCK_W,
+                          BLOCK_K=max(triton.next_power_of_2(k), 16))
+    return y.view(b, s, h).to(x.dtype)
