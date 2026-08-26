@@ -174,25 +174,31 @@ def _row_kernel_dot(XP, KW, WOUT, BIAS, Y,
     tl.store(Y + pid_row * H + offs_h, tl.ravel(out), mask=mh)
 
 
+_KW_CACHE = {}
+
+
 def convlinear_triton_dot(x, w_in, w_out, conv_weight, conv_bias=None):
-    """GEMM 化 Triton 版 (两级 tl.dot)."""
+    """GEMM 化 Triton 版 (两级 tl.dot). Kw 缓存 (权重不变时只算一次)."""
     b, s, h = x.shape
     k = conv_weight.shape[-1]
     p = k // 2
     w = w_out.shape[0]
     dev = x.device
-    K = conv_weight[0, 0].float()
-    win = w_in.float().reshape(-1)
-    idx = ((torch.arange(w, device=dev).view(1, -1)
-            + torch.arange(k, device=dev).view(-1, 1) - p) % w)
-    Kw = (K @ win[idx]).contiguous()                     # [k, w]
+    key = (id(conv_weight), id(w_in), w)
+    if key not in _KW_CACHE:
+        K = conv_weight[0, 0].float()
+        win = w_in.float().reshape(-1)
+        idx = ((torch.arange(w, device=dev).view(1, -1)
+                + torch.arange(k, device=dev).view(-1, 1) - p) % w)
+        _KW_CACHE[key] = (K @ win[idx]).contiguous()      # [k, w]
+    Kw = _KW_CACHE[key]
     wout_c = w_out.float().reshape(-1).contiguous()
     bias_c = (conv_bias.float().reshape(-1).contiguous()
               if conv_bias is not None else torch.zeros(w, device=dev))
     xp = torch.nn.functional.pad(x.float(), (p, p), mode="replicate").contiguous()
     sp = h + 2 * p
     y = torch.empty(b * s * h, device=dev, dtype=torch.float32)
-    BLOCK_H, BLOCK_W = 64, 128
+    BLOCK_H, BLOCK_W = 128, 64
     grid = (b * s, triton.cdiv(h, BLOCK_H))
     _row_kernel_dot[grid](xp, Kw, wout_c, bias_c, y,
                           SP=sp, H=h, W=w, K=k,
