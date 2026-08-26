@@ -23,28 +23,15 @@ VOCAB = 23005
 W_CONV, K_CONV = 64, 9
 
 
-class ConvFFN(nn.Module):
-    """ffn2 替换为 ConvLinear (Triton GEMM 前向, torch.autograd 反向走重排式)."""
-
-    def __init__(self, h=H, w=W_CONV, k=K_CONV):
-        super().__init__()
-        self.w_in = nn.Parameter(torch.empty(1, w))
-        self.w_out = nn.Parameter(torch.empty(w, 1))
-        self.conv = nn.Conv2d(1, 1, k, padding=k // 2, bias=True)
-        nn.init.normal_(self.w_in, 0.0, 0.02)
-        nn.init.normal_(self.w_out, 0.0, 0.02)
-
-
 def apply_conv_ffn(m):
     for layer in m.decoder_layers:
-        ffn2_old = layer.ffn.ffn2
         cf = ConvFFN()
         layer.ffn.ffn2 = cf
     return m
 
 
 class ConvFFN(nn.Module):
-    """ffn2 替换为 ConvLinear (纯 torch 重排前向, autograd 自动反向 — 简单可靠)."""
+    """ffn2 替换为 ConvLinear — Triton 前向+反向 (训练全链 kernel 化)."""
 
     def __init__(self, h=H, w=W_CONV, k=K_CONV):
         super().__init__()
@@ -53,17 +40,22 @@ class ConvFFN(nn.Module):
         self.conv = nn.Conv2d(1, 1, k, padding=k // 2, bias=True)
         nn.init.normal_(self.w_in, 0.0, 0.02)
         nn.init.normal_(self.w_out, 0.0, 0.02)
+        self._kw = None      # Kw 参数化缓存: 直接把 Kw 作为可训练参数 (等价且更简单)
+        self.kw = nn.Parameter(torch.empty(k, w))
+        nn.init.normal_(self.kw, 0.0, 0.02)
+        self.bias = nn.Parameter(torch.zeros(w))
 
     def forward(self, x):
-        # 训练用重排式 (可 autograd); 推理可换 Triton kernel
-        from conv_linear_fused import convlinear_fused
-        return convlinear_fused(x, self.w_in, self.w_out, self.conv.weight, self.conv.bias)
+        from conv_linear_triton_train import _ConvLinearFn
+        return _ConvLinearFn.apply(x.contiguous(), self.kw,
+                                   self.w_out.reshape(-1), self.bias)
 
 
 def make_model(conv=False):
     m = OpenASH(voc_size=VOCAB, hidden_size=H, num_heads=HEADS, num_layers=L).to(DEV)
     if conv:
         apply_conv_ffn(m)
+        m.to(DEV)   # 替换后的 ConvFFN 参数搬 GPU
     return m
 
 
