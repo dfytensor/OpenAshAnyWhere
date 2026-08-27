@@ -1,41 +1,49 @@
-import sys, time, random
+import sys, time
 sys.path.insert(0, r"F:\OpenASH2605\copyfirst_redesign")
 sys.path.insert(0, r"F:\OpenASH2605")
 import torch, torch.nn.functional as F
 from convash30 import ConvASH30, VOCAB
 
 torch.manual_seed(0)
-random.seed(0)
 m = ConvASH30().to('cuda')
 opt = torch.optim.AdamW(m.parameters(), lr=1e-3, weight_decay=0.01)
-seqs = torch.load(r'F:\OpenASH2605\minimind_data\pretrain_cached_1270238_256.pt',
-                  map_location='cpu', weights_only=True)[:10000]
 B, S = 32, 256
+x = torch.randint(2, VOCAB, (B, S), device='cuda')
+y = x.clone()
 
 
-def step(mod):
-    xs = []
-    for _ in range(B):
-        s = seqs[random.randrange(len(seqs))][:S]
-        xs.append(F.pad(s, (0, S - s.numel())))
-    x = torch.stack(xs).to('cuda')
-    y = x.clone(); y[:, :-1] = x[:, 1:]; y[:, -1] = 0
+def step():
     with torch.autocast('cuda', dtype=torch.bfloat16):
-        out, _ = mod(x)
-        loss = F.cross_entropy(out[:, :-1].reshape(-1, VOCAB), y[:, :-1].reshape(-1), ignore_index=0)
+        out, _ = m(x)
+        loss = F.cross_entropy(out.reshape(-1, VOCAB), y.reshape(-1))
     opt.zero_grad(set_to_none=True)
     loss.backward()
-    torch.nn.utils.clip_grad_norm_(mod.parameters(), 1.0)
     opt.step()
     return loss.item()
 
 
-t0 = time.time()
-for st in range(3):
-    print('step %d loss=%.3f (%.1fs)' % (st, step(m), time.time() - t0), flush=True)
+l = step()
+print('fused step0 loss=%.3f' % l, flush=True)
+for _ in range(2):
+    step()
+torch.cuda.synchronize()
+t0 = time.perf_counter()
+for _ in range(6):
+    l = step()
+torch.cuda.synchronize()
+print('fused: %.1f ms/step loss=%.3f peak=%.2fGB' % (
+    (time.perf_counter() - t0) / 6 * 1000, l, torch.cuda.max_memory_allocated() / 1e9), flush=True)
 
-print('try torch.compile default...', flush=True)
-mc = torch.compile(m, mode='default')
-t0 = time.time()
-for st in range(2):
-    print('compiled step %d loss=%.3f (%.1fs)' % (st, step(mc), time.time() - t0), flush=True)
+torch.cuda.synchronize()
+from torch.profiler import profile, ProfilerActivity
+with profile(activities=[ProfilerActivity.CUDA], record_shapes=False) as prof:
+    step()
+torch.cuda.synchronize()
+evs = {}
+for e in prof.key_averages():
+    if e.self_device_time_total > 0:
+        evs[e.key] = e.self_device_time_total
+tot = sum(evs.values())
+print('total cuda: %.1f ms' % (tot / 1000))
+for k, v in sorted(evs.items(), key=lambda kv: -kv[1])[:7]:
+    print('  %8.1f ms (%4.1f%%)  %s' % (v / 1000, v / tot * 100, k[:70]))
