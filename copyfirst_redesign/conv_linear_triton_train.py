@@ -129,6 +129,9 @@ class _ConvLinearFn(torch.autograd.Function):
         sp = h + 2 * p
         y = torch.empty(b * s * h, device=dev, dtype=x.dtype)
         BH, BW = 128, 64
+        if w > 64:
+            BW = min(triton.next_power_of_2(w), 256)
+            BH = 128 if BW <= 128 else 32
         BK = max(triton.next_power_of_2(k), 16)
         grid = (b * s, triton.cdiv(h, BH))
         _row_kernel_dot[grid](xp, Kw, w_out, bias, y,
@@ -148,6 +151,9 @@ class _ConvLinearFn(torch.autograd.Function):
         dy_flat = dy.contiguous().reshape(-1).float()
         dev = dy.device
         BH, BW = 128, 64
+        if w > 64:
+            BW = min(triton.next_power_of_2(w), 256)
+            BH = 128 if BW <= 128 else 32
         BK = max(triton.next_power_of_2(k), 16)
         grid = (b_s,)
         dx_s = torch.empty(b_s, k, h, device=dev, dtype=torch.float32)
