@@ -48,7 +48,7 @@ class ConvFFN(nn.Module):
     def forward(self, x):
         from conv_linear_triton_train import _ConvLinearFn
         return _ConvLinearFn.apply(x.contiguous(), self.kw,
-                                   self.w_out.reshape(-1), self.bias)
+                                   self.w_out.reshape(-1), self.bias, False)
 
 
 def make_model(conv=False):
