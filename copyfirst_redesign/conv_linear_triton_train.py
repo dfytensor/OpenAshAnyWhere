@@ -127,16 +127,21 @@ class _ConvLinearFn(torch.autograd.Function):
         dev = x.device
         xp = torch.nn.functional.pad(x, (p, p), mode="replicate").contiguous()
         sp = h + 2 * p
-        y = torch.empty(b * s * h, device=dev, dtype=x.dtype)
+        y = torch.zeros(b * s * h, device=dev, dtype=x.dtype)
         BH, BW = 128, 64
-        if w > 64:
-            BW = min(triton.next_power_of_2(w), 256)
-            BH = 128 if BW <= 128 else 32
         BK = max(triton.next_power_of_2(k), 16)
         grid = (b * s, triton.cdiv(h, BH))
-        _row_kernel_dot[grid](xp, Kw, w_out, bias, y,
-                              SP=sp, H=h, W=w, K=k, BLOCK_H=BH, BLOCK_W=BW, BLOCK_K=BK,
-                              ACT=act)
+        nw = triton.cdiv(w, BW)
+        for ci in range(nw):
+            w0 = ci * BW
+            wc = min(BW, w - w0)
+            yc = torch.empty(b * s * h, device=dev, dtype=x.dtype)
+            _row_kernel_dot[grid](xp, Kw[:, w0:w0 + wc].contiguous(),
+                                  w_out[w0:w0 + wc], bias[w0:w0 + wc], yc,
+                                  SP=sp, H=h, W=wc, K=k,
+                                  BLOCK_H=BH, BLOCK_W=BW, BLOCK_K=BK,
+                                  ACT=act)
+            y += yc
         ctx.save_for_backward(xp, Kw, w_out, bias)
         ctx.sp, ctx.h, ctx.w, ctx.k, ctx.act = sp, h, w, k, act
         return y.view(b, s, h)
@@ -151,29 +156,36 @@ class _ConvLinearFn(torch.autograd.Function):
         dy_flat = dy.contiguous().reshape(-1).float()
         dev = dy.device
         BH, BW = 128, 64
-        if w > 64:
-            BW = min(triton.next_power_of_2(w), 256)
-            BH = 128 if BW <= 128 else 32
         BK = max(triton.next_power_of_2(k), 16)
         grid = (b_s,)
-        dx_s = torch.empty(b_s, k, h, device=dev, dtype=torch.float32)
-        dkw_p = torch.empty(b_s, BK, w, device=dev, dtype=torch.float32)
-        dw_p = torch.empty(b_s, w, device=dev, dtype=torch.float32)
-        db_p = torch.empty(b_s, w, device=dev, dtype=torch.float32)
-        _row_kernel_bwd[grid](xp, dy_flat, Kw, w_out, bias,
-                              dx_s, dkw_p, dw_p, db_p,
-                              SP=sp, H=h, W=w, K=k,
-                              BLOCK_H=BH, BLOCK_W=BW, BLOCK_K=BK,
-                              ACT=act, num_warps=8, num_stages=2)
-        dKw = dkw_p.sum(0)[:k]
-        dw_out = dw_p.sum(0)
-        db = db_p.sum(0)
+        nw = triton.cdiv(w, BW)
+        dx_s = torch.zeros(b_s, k, h, device=dev, dtype=torch.float32)
+        dKw = torch.zeros(k, w, device=dev, dtype=torch.float32)
+        dw_out = torch.zeros(w, device=dev, dtype=torch.float32)
+        db = torch.zeros(w, device=dev, dtype=torch.float32)
+        for ci in range(nw):
+            w0 = ci * BW
+            wc = min(BW, w - w0)
+            dx_sc = torch.empty(b_s, k, h, device=dev, dtype=torch.float32)
+            dkw_p = torch.empty(b_s, BK, wc, device=dev, dtype=torch.float32)
+            dw_p = torch.empty(b_s, wc, device=dev, dtype=torch.float32)
+            db_p = torch.empty(b_s, wc, device=dev, dtype=torch.float32)
+            _row_kernel_bwd[grid](xp, dy_flat, Kw[:, w0:w0 + wc].contiguous(),
+                                  w_out[w0:w0 + wc], bias[w0:w0 + wc],
+                                  dx_sc, dkw_p, dw_p, db_p,
+                                  SP=sp, H=h, W=wc, K=k,
+                                  BLOCK_H=BH, BLOCK_W=BW, BLOCK_K=BK,
+                                  ACT=act, num_warps=8, num_stages=2)
+            dx_s += dx_sc
+            dKw[:, w0:w0 + wc] = dkw_p.sum(0)[:k]
+            dw_out[w0:w0 + wc] = dw_p.sum(0)
+            db[w0:w0 + wc] = db_p.sum(0)
         dxp = torch.empty(b_s, sp, device=dev, dtype=torch.float32)
         NP = 256
         _row_kernel_scatter[(b_s, triton.cdiv(sp, NP))](dx_s, dxp,
                                                         H=h, K=k, SP=sp, BLOCK_P=NP)
         dx = dxp[:, p:p + h]
-        dx[:, 0] += dxp[:, 0]
-        dx[:, h - 1] += dxp[:, sp - 1]
+        dx[:, 0] += dxp[:, :p].sum(1)
+        dx[:, h - 1] += dxp[:, sp - p:].sum(1)
         dx = dx.view(dy.shape[0], dy.shape[1], h).to(dy.dtype)
         return dx, dKw.to(Kw.dtype), dw_out.to(w_out.dtype), db.to(bias.dtype), None

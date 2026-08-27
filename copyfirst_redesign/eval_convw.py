@@ -36,7 +36,8 @@ def main():
     torch.manual_seed(0); random.seed(0)
     seqs = torch.load(PT_CACHE, map_location="cpu", weights_only=True)[:100000]
     configs = [("linear", None), ("conv_w64", (64, 9)), ("conv_w128", (128, 9)),
-               ("conv_w256", (256, 9)), ("conv_k15_w64", (64, 15)), ("conv_k15_w128", (128, 15))]
+               ("conv_w256", (256, 9)), ("conv_w512", (512, 9)), ("conv_w1024", (1024, 9)),
+               ("conv_k15_w64", (64, 15)), ("conv_k15_w128", (128, 15))]
     for tag, cfg in configs:
         ckpt = r"F:\OpenASH2605\copyfirst_redesign\ash30m_%s.pth" % tag
         if not os.path.exists(ckpt):
