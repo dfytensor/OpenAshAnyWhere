@@ -1,0 +1,48 @@
+=== linear (34.58M) ===
+  linear step 0 loss=12.377 (0s, 421.6ms/step)
+  linear step 500 loss=4.684 (39s, 77.1ms/step)
+  linear step 1000 loss=4.413 (76s, 76.4ms/step)
+  linear step 1500 loss=4.504 (114s, 76.0ms/step)
+  linear step 2000 loss=3.946 (152s, 75.8ms/step)
+  linear step 2500 loss=3.838 (189s, 75.7ms/step)
+  linear step 2999 loss=4.023 (232s, 77.4ms/step)
+=== r=1 (29.88M) ===
+  r=1 step 0 loss=17.947 (0s, 172.5ms/step)
+  r=1 step 500 loss=5.227 (57s, 113.8ms/step)
+  r=1 step 1000 loss=4.958 (114s, 113.8ms/step)
+  r=1 step 1500 loss=5.199 (172s, 114.4ms/step)
+  r=1 step 2000 loss=4.747 (226s, 112.8ms/step)
+  r=1 step 2500 loss=4.500 (285s, 113.9ms/step)
+  r=1 step 2999 loss=4.767 (347s, 115.5ms/step)
+=== r=2 (29.90M) ===
+  r=2 step 0 loss=17.947 (0s, 194.7ms/step)
+  r=2 step 500 loss=5.118 (62s, 122.8ms/step)
+  r=2 step 1000 loss=4.907 (121s, 120.5ms/step)
+  r=2 step 1500 loss=5.067 (180s, 120.1ms/step)
+  r=2 step 2000 loss=4.624 (238s, 118.9ms/step)
+  r=2 step 2500 loss=4.432 (292s, 116.6ms/step)
+  r=2 step 2999 loss=4.616 (352s, 117.3ms/step)
+=== r=4 (29.94M) ===
+  r=4 step 0 loss=17.947 (0s, 127.3ms/step)
+  r=4 step 500 loss=4.996 (62s, 123.8ms/step)
+  r=4 step 1000 loss=4.713 (125s, 125.1ms/step)
+  r=4 step 1500 loss=4.905 (186s, 123.9ms/step)
+  r=4 step 2000 loss=4.399 (245s, 122.6ms/step)
+  r=4 step 2500 loss=4.257 (304s, 121.6ms/step)
+  r=4 step 2999 loss=4.469 (360s, 119.9ms/step)
+=== r=8 (30.01M) ===
+  r=8 step 0 loss=17.947 (0s, 190.6ms/step)
+  r=8 step 500 loss=5.017 (58s, 116.4ms/step)
+  r=8 step 1000 loss=4.731 (122s, 122.2ms/step)
+  r=8 step 1500 loss=4.930 (185s, 123.4ms/step)
+  r=8 step 2000 loss=4.402 (245s, 122.5ms/step)
+  r=8 step 2500 loss=4.235 (305s, 122.0ms/step)
+  r=8 step 2999 loss=4.465 (361s, 120.2ms/step)
+
+最终 loss:
+  linear: 3.147
+  r=1: 4.081
+  r=2: 3.864
+  r=4: 3.687
+  r=8: 3.658
+完成

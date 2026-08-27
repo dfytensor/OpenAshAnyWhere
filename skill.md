@@ -327,7 +327,56 @@ python wdlm_verification/compare_phasegate.py --steps 2000  # PhaseGate vs ReLU
 
 ---
 
-## 8. 20M 多模型对比
+## 8. 30M Cap+Decay 训练
+
+脚本位于 `train_30m_cap_decay/`，训练集成 state norm cap + decay 的 OpenASH 30M 模型。
+
+模型配置: H=432, L=8, heads=8, ≈30M 参数
+默认参数: cap=150, decay=0.97, chunk=64
+训练时每个 chunk 后对 cummax state 做范数截断 + 衰减，推理时无需额外干预。
+
+### 8.1 完整训练
+
+```powershell
+python train_30m_cap_decay/train.py --pretrain_epochs 3 --sft_epochs 2 --compile 0
+```
+
+### 8.2 跳过 Pretrain
+
+```powershell
+python train_30m_cap_decay/train.py --skip_pretrain --sft_epochs 2 --compile 0
+```
+
+### 8.3 仅生成测试
+
+```powershell
+python train_30m_cap_decay/train.py --test_only
+```
+
+### 8.4 自定义 cap/decay 参数
+
+```powershell
+python train_30m_cap_decay/train.py --state_cap 200 --state_decay 0.99 --compile 0
+```
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `--state_cap` | 150 | state 范数截断阈值 |
+| `--state_decay` | 0.97 | 每个 chunk 后的 state 衰减系数 |
+| `--pretrain_epochs` | 3 | Pretrain 轮数 |
+| `--sft_epochs` | 2 | SFT 轮数 |
+| `--skip_pretrain` | — | 跳过 pretrain |
+| `--skip_sft` | — | 跳过 SFT |
+| `--test_only` | — | 只跑生成测试 |
+| `--compile` | 0 | torch.compile 开关 |
+| `--max_lines_pretrain` | 0 | 限制 pretrain 数据行数 |
+| `--max_lines_sft` | 0 | 限制 SFT 数据行数 |
+
+产出: `train_30m_cap_decay/openash30m_cd_pretrain_final.pth`, `openash30m_cd_sft_final.pth`
+
+---
+
+## 9. 20M 多模型对比
 
 ```powershell
 python train_20m/train.py                     # 训练 WDLM/Transformer/OpenASH

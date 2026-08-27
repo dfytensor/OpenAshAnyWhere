@@ -1,0 +1,18 @@
+词表大小 23003
+代理词表大小 2094
+Building prefix dict from the default dictionary ...
+Loading model from cache C:\Users\Administrator\AppData\Local\Temp\jieba.cache
+Loading model cost 0.521 seconds.
+Prefix dict has been built successfully.
+可训练参数: 86.1M
+step 0 loss=13.867 acc(gap64/512)=0/0 (15s)
+step 250 loss=0.001 acc(gap64/512)=100/100 (188s)
+step 500 loss=0.016 acc(gap64/512)=100/100 (350s)
+step 750 loss=0.000 acc(gap64/512)=100/96 (511s)
+step 1000 loss=0.000 acc(gap64/512)=100/100 (676s)
+step 1250 loss=0.000 acc(gap64/512)=100/100 (837s)
+step 1500 loss=0.000 acc(gap64/512)=100/100 (999s)
+step 1750 loss=0.000 acc(gap64/512)=100/92 (1160s)
+step 2000 loss=0.000 acc(gap64/512)=100/100 (1319s)
+step 2250 loss=0.000 acc(gap64/512)=100/100 (1482s)
+完成 1625s

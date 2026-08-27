@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Large model checkpoints / run outputs (reproducible from code)
+*.pt
+*.pth
+*.ckpt
+runs/
+runs_mm/
+runs_multi/
+runs_deep/
+runs_newton/
+runs_deqlm/
+
+# Logs
+*.log
+*.err
+*.out
+*.pid
+
+# Misc
+.DS_Store
+.idea/
+.vscode/

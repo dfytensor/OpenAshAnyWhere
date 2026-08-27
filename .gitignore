@@ -6,3 +6,10 @@ __pycache__/
 *.jsonl
 open_ash_voc_agent.json
 vocabulary_nnn.json
+
+FRSMASH/
+_frsmash37_repo/
+_precision_diffusion/
+
+critical_tokenization/
+frsm/FRSM/

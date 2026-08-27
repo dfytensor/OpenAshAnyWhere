@@ -1,0 +1,74 @@
+词表大小 23004
+代理词表大小 2095
+Pretrain: 2000 samples from minimind_data/pretrain_t2t_mini.jsonl (max_lines=2000)
+======================================================================
+  FRSM v3 Improvement Directions
+======================================================================
+
+--- 1. Alpha Tuning ---
+
+  [α=0.50] 20,267,485p
+    step 100 loss=6.3309 best=6.1985
+    step 200 loss=6.0536 best=5.7791
+    step 300 loss=6.9198 best=5.5739
+    step 400 loss=5.6595 best=5.3366
+    step 500 loss=5.8710 best=5.2878
+    => eval=5.6963 ppl=297.77
+
+  [α=0.73] 20,267,485p
+    step 100 loss=6.4087 best=6.2129
+    step 200 loss=6.1852 best=5.8210
+    step 300 loss=6.8915 best=5.5988
+    step 400 loss=5.7822 best=5.3922
+    step 500 loss=5.9626 best=5.3844
+    => eval=5.7401 ppl=311.10
+
+  [α=0.88] 20,267,485p
+    step 100 loss=6.4125 best=6.2233
+    step 200 loss=6.1992 best=5.8406
+    step 300 loss=6.9033 best=5.6104
+    step 400 loss=5.8307 best=5.4443
+    step 500 loss=6.0120 best=5.4284
+    => eval=5.7793 ppl=323.53
+
+  [α=0.95] 20,267,485p
+    step 100 loss=6.4069 best=6.2273
+    step 200 loss=6.2242 best=5.8453
+    step 300 loss=6.9190 best=5.6300
+    step 400 loss=5.8574 best=5.4696
+    step 500 loss=6.0588 best=5.4696
+    => eval=5.8055 ppl=332.12
+
+--- 2. Gated Fusion ---
+
+  [GatedFusion] 20,005,345p
+    step 100 loss=6.3761 best=6.1717
+    step 200 loss=6.2281 best=5.8032
+    step 300 loss=6.9782 best=5.6376
+    step 400 loss=5.8288 best=5.4140
+    step 500 loss=6.0361 best=5.4140
+    => eval=5.7840 ppl=325.06
+
+--- 3. Content Query ---
+
+  [ContentQuery] 20,201,693p
+    step 100 loss=6.3757 best=6.1470
+    step 200 loss=6.2123 best=5.8784
+    step 300 loss=7.0180 best=5.6749
+    step 400 loss=5.8435 best=5.5248
+    step 500 loss=6.1186 best=5.5009
+    => eval=5.8441 ppl=345.18
+
+--- 4. Expansion Factor ---
+
+  [exp=3.0x] 28,921,309p
+    step 100 loss=6.3972 best=6.2304
+    step 200 loss=6.1589 best=5.8147
+    step 300 loss=6.9305 best=5.6413
+    step 400 loss=5.7916 best=5.4705
+    step 500 loss=5.9824 best=5.4022
+    => eval=5.7778 ppl=323.04
+
+  [exp=4.0x] 40,720,861p
+    step 100 loss=6.4091 best=6.2312
+    step 200 loss=6.1943 best=5.8572

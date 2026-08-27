@@ -1,0 +1,33 @@
+¦Á=0.50: best=0.00009 599s
+  dist=    4 acc=100.0%
+  dist=   64 acc=100.0%
+  dist=  256 acc=100.0%
+  dist= 1024 acc=8.6%
+  dist= 4096 acc=5.5%
+  dist= 8192 acc=0.0%
+  dist=16384 acc=6.2%
+  dist=32768 acc=12.5%
+  dist=65536 acc=6.2%
+¦Á=0.88: best=0.00008 428s
+  dist=    4 acc=100.0%
+  dist=   64 acc=100.0%
+  dist=  256 acc=100.0%
+  dist= 1024 acc=3.5%
+  dist= 4096 acc=11.3%
+  dist= 8192 acc=6.2%
+  dist=16384 acc=0.0%
+  dist=32768 acc=6.2%
+  dist=65536 acc=0.0%
+
+Orig-4sc: best=0.00026 277s
+  dist=    4 acc=100.0%
+  dist=   64 acc=100.0%
+  dist=  256 acc=100.0%
+  dist= 1024 acc=100.0%
+  dist= 4096 acc=100.0%
+  dist= 8192 acc=100.0%
+  dist=16384 acc=81.2%
+  dist=32768 acc=68.8%
+  dist=65536 acc=56.2%
+
+Done.

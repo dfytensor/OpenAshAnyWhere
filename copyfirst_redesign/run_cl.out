@@ -1,0 +1,11 @@
+数据: 30000 条
+原版 4 层: 51.9M | ConvLinear-ffn2(w=96): 49.5M (95.4%)
+=== 原版训练 ===
+  原版 step 100 loss=5.527 (3s)
+  原版 step 200 loss=5.114 (5s)
+  原版 step 300 loss=5.037 (7s)
+=== ConvLinear-ffn2 训练 ===
+  ConvLinear step 100 loss=5.694 (30s)
+  ConvLinear step 200 loss=5.075 (59s)
+  ConvLinear step 300 loss=5.032 (88s)
+步时(fwd+bwd): 原版 11.7 ms | ConvLinear 290.6 ms (24.79x)

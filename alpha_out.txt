@@ -1,0 +1,16 @@
+词表大小 23004
+代理词表大小 2095
+Pretrain: 2000 samples from minimind_data/pretrain_t2t_mini.jsonl (max_lines=2000)
+======================================================================
+  α=0.50 vs α=0.88: LM + CopyFirst 完整对比
+======================================================================
+    step  500 best=0.00053 80s
+    step 1000 best=0.00020 160s
+    step 1500 best=0.00012 244s
+    step 2000 best=0.00010 326s
+    step 2500 best=0.00010 412s
+    step  500 best=0.00042 87s
+    step 1000 best=0.00016 176s
+    step 1500 best=0.00010 261s
+    step 2000 best=0.00008 347s
+    step 2500 best=0.00007 429s

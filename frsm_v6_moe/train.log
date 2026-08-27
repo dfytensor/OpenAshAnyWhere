@@ -1,0 +1,65 @@
+Device: cuda
+GPU: NVIDIA GeForce RTX 4090 D
+词表大小 23004
+代理词表大小 2095
+Vocab size: 23005
+Model: 45,360,689 (45.4M)
+Batch: 16, Seq: 256, Chunk: auto
+Lines: 1270238, Steps/epoch: 79390, Total: 238170
+Epochs: 3
+Pretrain: 1270225 samples from ..\minimind_data\pretrain_t2t_mini.jsonl (max_lines=1270238)
+
+Training 238170 steps (3 epochs)...
+======================================================================
+
+--- Epoch 1/3 ---
+  step    200/238170 | loss: 7.9379 | aux: 1.0697 | lr: 2.00e-04 | 34249 tok/s
+  step    400/238170 | loss: 6.0919 | aux: 1.0704 | lr: 4.00e-04 | 35161 tok/s
+  step    600/238170 | loss: 5.4344 | aux: 1.0696 | lr: 5.00e-04 | 35544 tok/s
+  step    800/238170 | loss: 5.1169 | aux: 1.0694 | lr: 5.00e-04 | 35491 tok/s
+  step   1000/238170 | loss: 4.9781 | aux: 1.0703 | lr: 5.00e-04 | 34876 tok/s
+  step   1200/238170 | loss: 4.9404 | aux: 1.0703 | lr: 5.00e-04 | 34775 tok/s
+  step   1400/238170 | loss: 4.8609 | aux: 1.0705 | lr: 5.00e-04 | 34688 tok/s
+  step   1600/238170 | loss: 4.8190 | aux: 1.0720 | lr: 5.00e-04 | 34630 tok/s
+  step   1800/238170 | loss: 4.7847 | aux: 1.0741 | lr: 5.00e-04 | 34533 tok/s
+  step   2000/238170 | loss: 4.7644 | aux: 1.0745 | lr: 5.00e-04 | 34489 tok/s
+  step   2200/238170 | loss: 4.7611 | aux: 1.0769 | lr: 5.00e-04 | 34475 tok/s
+  step   2400/238170 | loss: 4.7262 | aux: 1.0821 | lr: 5.00e-04 | 34522 tok/s
+  step   2600/238170 | loss: 4.6955 | aux: 1.0895 | lr: 5.00e-04 | 34484 tok/s
+  step   2800/238170 | loss: 4.6633 | aux: 1.0981 | lr: 5.00e-04 | 34469 tok/s
+  step   3000/238170 | loss: 4.6229 | aux: 1.1106 | lr: 5.00e-04 | 34495 tok/s
+  step   3200/238170 | loss: 4.6387 | aux: 1.1199 | lr: 5.00e-04 | 34511 tok/s
+  step   3400/238170 | loss: 4.6185 | aux: 1.1323 | lr: 5.00e-04 | 34523 tok/s
+  step   3600/238170 | loss: 4.6046 | aux: 1.1441 | lr: 5.00e-04 | 34547 tok/s
+  step   3800/238170 | loss: 4.5957 | aux: 1.1518 | lr: 5.00e-04 | 34569 tok/s
+  step   4000/238170 | loss: 4.5784 | aux: 1.1687 | lr: 5.00e-04 | 34495 tok/s
+  step   4200/238170 | loss: 4.5549 | aux: 1.1768 | lr: 5.00e-04 | 34503 tok/s
+  step   4400/238170 | loss: 4.5615 | aux: 1.1809 | lr: 5.00e-04 | 34452 tok/s
+  step   4600/238170 | loss: 4.5465 | aux: 1.1972 | lr: 5.00e-04 | 34436 tok/s
+  step   4800/238170 | loss: 4.5490 | aux: 1.2039 | lr: 5.00e-04 | 34438 tok/s
+  step   5000/238170 | loss: 4.5519 | aux: 1.2185 | lr: 5.00e-04 | 34443 tok/s
+  step   5200/238170 | loss: 4.5259 | aux: 1.2170 | lr: 5.00e-04 | 34373 tok/s
+  step   5400/238170 | loss: 4.5127 | aux: 1.2251 | lr: 4.99e-04 | 34354 tok/s
+  step   5600/238170 | loss: 4.5150 | aux: 1.2263 | lr: 4.99e-04 | 34342 tok/s
+  step   5800/238170 | loss: 4.5084 | aux: 1.2371 | lr: 4.99e-04 | 34320 tok/s
+  step   6000/238170 | loss: 4.5034 | aux: 1.2434 | lr: 4.99e-04 | 34318 tok/s
+  step   6200/238170 | loss: 4.4927 | aux: 1.2391 | lr: 4.99e-04 | 34324 tok/s
+  step   6400/238170 | loss: 4.4815 | aux: 1.2396 | lr: 4.99e-04 | 34322 tok/s
+  step   6600/238170 | loss: 4.4759 | aux: 1.2498 | lr: 4.99e-04 | 34346 tok/s
+  step   6800/238170 | loss: 4.4554 | aux: 1.2532 | lr: 4.99e-04 | 34367 tok/s
+  step   7000/238170 | loss: 4.4635 | aux: 1.2540 | lr: 4.99e-04 | 34315 tok/s
+  step   7200/238170 | loss: 4.4827 | aux: 1.2556 | lr: 4.99e-04 | 34302 tok/s
+  step   7400/238170 | loss: 4.4707 | aux: 1.2592 | lr: 4.99e-04 | 34289 tok/s
+  step   7600/238170 | loss: 4.4429 | aux: 1.2634 | lr: 4.99e-04 | 34288 tok/s
+  step   7800/238170 | loss: 4.4665 | aux: 1.2611 | lr: 4.99e-04 | 34282 tok/s
+  step   8000/238170 | loss: 4.4605 | aux: 1.2579 | lr: 4.99e-04 | 34302 tok/s
+  step   8200/238170 | loss: 4.4374 | aux: 1.2645 | lr: 4.99e-04 | 34331 tok/s
+  step   8400/238170 | loss: 4.4346 | aux: 1.2695 | lr: 4.99e-04 | 34359 tok/s
+  step   8600/238170 | loss: 4.4510 | aux: 1.2666 | lr: 4.99e-04 | 34359 tok/s
+  step   8800/238170 | loss: 4.4443 | aux: 1.2672 | lr: 4.98e-04 | 34374 tok/s
+  step   9000/238170 | loss: 4.4398 | aux: 1.2688 | lr: 4.98e-04 | 34397 tok/s
+  step   9200/238170 | loss: 4.4109 | aux: 1.2757 | lr: 4.98e-04 | 34410 tok/s
+  step   9400/238170 | loss: 4.4314 | aux: 1.2767 | lr: 4.98e-04 | 34401 tok/s
+  step   9600/238170 | loss: 4.4244 | aux: 1.2877 | lr: 4.98e-04 | 34399 tok/s
+  step   9800/238170 | loss: 4.4088 | aux: 1.2841 | lr: 4.98e-04 | 34402 tok/s
+  step  10000/238170 | loss: 4.4152 | aux: 1.2824 | lr: 4.98e-04 | 34365 tok/s

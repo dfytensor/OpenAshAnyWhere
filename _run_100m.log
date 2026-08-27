@@ -1,0 +1,58 @@
+start: target 100,000,000 tokens, chunk 2048, untrained NLL~10.043
+     2.00M  NLL=10.2090  maxTokNLL=12.55  drift=+0.0000  nan=False  ETA=91min
+     4.00M  NLL=10.2090  maxTokNLL=12.55  drift=+0.0000  nan=False  ETA=90min
+     6.00M  NLL=10.2089  maxTokNLL=12.55  drift=-0.0001  nan=False  ETA=88min
+     8.00M  NLL=10.2089  maxTokNLL=12.55  drift=-0.0001  nan=False  ETA=86min
+    10.00M  NLL=10.2089  maxTokNLL=12.55  drift=-0.0001  nan=False  ETA=84min
+    12.00M  NLL=10.2089  maxTokNLL=12.55  drift=-0.0001  nan=False  ETA=82min
+    14.00M  NLL=10.2088  maxTokNLL=12.55  drift=-0.0002  nan=False  ETA=80min
+    16.00M  NLL=10.2087  maxTokNLL=12.58  drift=-0.0002  nan=False  ETA=78min
+    18.00M  NLL=10.2088  maxTokNLL=12.58  drift=-0.0002  nan=False  ETA=76min
+    20.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0002  nan=False  ETA=74min
+    22.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0001  nan=False  ETA=72min
+    24.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0002  nan=False  ETA=70min
+    26.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0002  nan=False  ETA=68min
+    28.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0002  nan=False  ETA=66min
+    30.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0002  nan=False  ETA=64min
+    32.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0002  nan=False  ETA=63min
+    34.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0002  nan=False  ETA=61min
+    36.00M  NLL=10.2089  maxTokNLL=12.59  drift=-0.0001  nan=False  ETA=59min
+    38.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0001  nan=False  ETA=57min
+    40.00M  NLL=10.2089  maxTokNLL=12.59  drift=-0.0001  nan=False  ETA=55min
+    42.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0002  nan=False  ETA=53min
+    44.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0002  nan=False  ETA=51min
+    46.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0002  nan=False  ETA=50min
+    48.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0002  nan=False  ETA=48min
+    50.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0002  nan=False  ETA=46min
+    52.00M  NLL=10.2088  maxTokNLL=12.59  drift=-0.0002  nan=False  ETA=44min
+    54.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=42min
+    56.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=40min
+    58.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=39min
+    60.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=37min
+    62.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=35min
+    64.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=33min
+    66.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=31min
+    68.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=29min
+    70.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=27min
+    72.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=26min
+    74.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=24min
+    76.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=22min
+    78.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=20min
+    80.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=18min
+    82.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=16min
+    84.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=15min
+    86.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=13min
+    88.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=11min
+    90.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=9min
+    92.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=7min
+    94.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=5min
+    96.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=4min
+    98.00M  NLL=10.2087  maxTokNLL=12.59  drift=-0.0003  nan=False  ETA=2min
+
+============================================================
+TOTAL: 99,999,744 tokens = 100M  in 91.5 min  (18,217 tok/s)
+mean NLL   = 10.20866  (unif 10.043)   PPL = 27137.1
+max tok NLL= 12.5933   (bounded<50 => no blow-up)
+drift 0->end = 10.20898 -> 10.20866 (-0.00033)
+=> 1вк(100M) context PPL STABLE
+=> peak VRAM: 14.73 GB (O(chunk), flat)

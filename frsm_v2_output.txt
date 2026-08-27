@@ -1,0 +1,13 @@
+词表大小 23004
+代理词表大小 2095
+Pretrain: 2000 samples from minimind_data/pretrain_t2t_mini.jsonl (max_lines=2000)
+=======================================================
+  FRSM Depth Ablation: 1 vs 3 vs 5 layers
+  d_model=256, 4 scales, 500 steps, bs=4
+=======================================================
+
+  [1-layer] 13,710,813 params
+    step 100 lm=6.6608 best=6.5783 272s
+    step 200 lm=6.5627 best=6.0012 377s
+    step 300 lm=5.9501 best=5.4555 481s
+    step 400 lm=5.6249 best=5.4555 639s

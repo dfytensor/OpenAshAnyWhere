@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "F:\OpenASH2605\frsm_v6_moe\ablation.py", line 206, in <module>
+    run()
+    ~~~^^
+  File "F:\OpenASH2605\frsm_v6_moe\ablation.py", line 131, in run
+    r = train_one(m, vs, loader, device, total_steps)
+  File "F:\OpenASH2605\frsm_v6_moe\ablation.py", line 90, in train_one
+    step += 1; loss_acc += loss.item()
+                           ~~~~~~~~~^^
+torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+

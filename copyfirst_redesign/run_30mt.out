@@ -1,0 +1,9 @@
+‘≠∞Ê: 34.6M | ConvLinear∞Ê: 33.0M (95.5%)
+=== ConvLinear∞Ê‘§—µ¡∑ ===
+  ConvTri step 0 loss=17.490 (1s)
+  ConvTri step 500 loss=4.675 (17s)
+  ConvTri step 1000 loss=4.359 (34s)
+  ConvTri step 1500 loss=4.443 (51s)
+  ConvTri step 2000 loss=3.921 (67s)
+  ConvTri step 2500 loss=3.863 (84s)
+ÕÍ≥…

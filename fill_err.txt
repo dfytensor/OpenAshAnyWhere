@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "F:\OpenASH2605\test_fill_eval.py", line 83, in <module>
+    print(f"  Transformer    |   ~100%|       ? |      ? |      ? | O(n\xb2)")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'gbk' codec can't encode character '\xb2' in position 59: illegal multibyte sequence

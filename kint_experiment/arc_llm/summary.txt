@@ -1,0 +1,4 @@
+标准 wd=0.1: grok=None final_te=0.012 slingshot=4.222
+SGR+固定wd: grok=None final_te=0.012 slingshot=4.677
+CLR(无SGR): grok=4600 final_te=0.999 slingshot=5.031
+ARC-LLM(SGR+CLR) ★: grok=4200 final_te=1.000 slingshot=4.729

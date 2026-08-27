@@ -1,0 +1,147 @@
+从 F:\OpenASH2605\copyfirst_redesign\convash30_pt_full.pth 加载完成
+SFT 样本 905718, steps=28304
+SFT 0/28304 loss=4.265 (3s, 2779ms/step)
+SFT 250/28304 loss=3.569 (136s, 541ms/step)
+SFT 500/28304 loss=3.382 (272s, 543ms/step)
+SFT 750/28304 loss=3.273 (411s, 547ms/step)
+SFT 1000/28304 loss=3.369 (542s, 541ms/step)
+SFT 1250/28304 loss=3.503 (679s, 543ms/step)
+SFT 1500/28304 loss=3.438 (819s, 546ms/step)
+SFT 1750/28304 loss=3.591 (953s, 544ms/step)
+SFT 2000/28304 loss=3.113 (1092s, 546ms/step)
+SFT 2250/28304 loss=3.286 (1236s, 549ms/step)
+SFT 2500/28304 loss=3.221 (1372s, 549ms/step)
+SFT 2750/28304 loss=3.145 (1511s, 549ms/step)
+SFT 3000/28304 loss=3.542 (1644s, 548ms/step)
+SFT 3250/28304 loss=3.313 (1786s, 549ms/step)
+SFT 3500/28304 loss=3.411 (1928s, 551ms/step)
+SFT 3750/28304 loss=3.258 (2056s, 548ms/step)
+SFT 4000/28304 loss=3.173 (2196s, 549ms/step)
+SFT 4250/28304 loss=3.351 (2329s, 548ms/step)
+SFT 4500/28304 loss=3.352 (2467s, 548ms/step)
+SFT 4750/28304 loss=3.232 (2610s, 549ms/step)
+SFT 5000/28304 loss=3.154 (2745s, 549ms/step)
+checkpoint 5000 已存
+SFT 5250/28304 loss=3.149 (2885s, 549ms/step)
+SFT 5500/28304 loss=3.239 (3022s, 549ms/step)
+SFT 5750/28304 loss=3.253 (3157s, 549ms/step)
+SFT 6000/28304 loss=3.174 (3295s, 549ms/step)
+SFT 6250/28304 loss=3.286 (3428s, 548ms/step)
+SFT 6500/28304 loss=3.069 (3567s, 549ms/step)
+SFT 6750/28304 loss=3.318 (3710s, 550ms/step)
+SFT 7000/28304 loss=3.027 (3844s, 549ms/step)
+SFT 7250/28304 loss=2.977 (3986s, 550ms/step)
+SFT 7500/28304 loss=3.409 (4123s, 550ms/step)
+SFT 7750/28304 loss=3.135 (4264s, 550ms/step)
+SFT 8000/28304 loss=3.098 (4406s, 551ms/step)
+SFT 8250/28304 loss=3.188 (4540s, 550ms/step)
+SFT 8500/28304 loss=3.022 (4680s, 551ms/step)
+SFT 8750/28304 loss=3.344 (4826s, 551ms/step)
+SFT 9000/28304 loss=3.392 (4962s, 551ms/step)
+SFT 9250/28304 loss=3.152 (5104s, 552ms/step)
+SFT 9500/28304 loss=2.969 (5239s, 551ms/step)
+SFT 9750/28304 loss=3.290 (5382s, 552ms/step)
+SFT 10000/28304 loss=3.296 (5523s, 552ms/step)
+checkpoint 10000 已存
+SFT 10250/28304 loss=3.218 (5657s, 552ms/step)
+SFT 10500/28304 loss=3.072 (5798s, 552ms/step)
+SFT 10750/28304 loss=3.182 (5932s, 552ms/step)
+SFT 11000/28304 loss=3.087 (6064s, 551ms/step)
+SFT 11250/28304 loss=3.104 (6202s, 551ms/step)
+SFT 11500/28304 loss=3.180 (6333s, 551ms/step)
+SFT 11750/28304 loss=3.071 (6469s, 550ms/step)
+SFT 12000/28304 loss=3.185 (6606s, 550ms/step)
+SFT 12250/28304 loss=3.089 (6738s, 550ms/step)
+SFT 12500/28304 loss=3.110 (6876s, 550ms/step)
+SFT 12750/28304 loss=3.092 (7007s, 550ms/step)
+SFT 13000/28304 loss=3.214 (7142s, 549ms/step)
+SFT 13250/28304 loss=2.882 (7280s, 549ms/step)
+SFT 13500/28304 loss=2.983 (7412s, 549ms/step)
+SFT 13750/28304 loss=3.166 (7547s, 549ms/step)
+SFT 14000/28304 loss=3.189 (7685s, 549ms/step)
+SFT 14250/28304 loss=3.204 (7816s, 548ms/step)
+SFT 14500/28304 loss=3.170 (7952s, 548ms/step)
+SFT 14750/28304 loss=3.127 (8088s, 548ms/step)
+SFT 15000/28304 loss=3.030 (8222s, 548ms/step)
+checkpoint 15000 已存
+SFT 15250/28304 loss=2.970 (8360s, 548ms/step)
+SFT 15500/28304 loss=2.803 (8503s, 549ms/step)
+SFT 15750/28304 loss=3.301 (8642s, 549ms/step)
+SFT 16000/28304 loss=3.061 (8780s, 549ms/step)
+SFT 16250/28304 loss=3.094 (8917s, 549ms/step)
+SFT 16500/28304 loss=3.236 (9058s, 549ms/step)
+SFT 16750/28304 loss=3.199 (9192s, 549ms/step)
+SFT 17000/28304 loss=3.073 (9332s, 549ms/step)
+SFT 17250/28304 loss=3.148 (9475s, 549ms/step)
+SFT 17500/28304 loss=3.221 (9610s, 549ms/step)
+SFT 17750/28304 loss=3.038 (9749s, 549ms/step)
+SFT 18000/28304 loss=2.711 (9883s, 549ms/step)
+SFT 18250/28304 loss=2.967 (10020s, 549ms/step)
+SFT 18500/28304 loss=3.054 (10157s, 549ms/step)
+SFT 18750/28304 loss=3.214 (10291s, 549ms/step)
+SFT 19000/28304 loss=3.178 (10428s, 549ms/step)
+SFT 19250/28304 loss=2.998 (10567s, 549ms/step)
+SFT 19500/28304 loss=2.905 (10702s, 549ms/step)
+SFT 19750/28304 loss=3.144 (10841s, 549ms/step)
+SFT 20000/28304 loss=3.105 (10975s, 549ms/step)
+checkpoint 20000 已存
+SFT 20250/28304 loss=3.102 (11116s, 549ms/step)
+SFT 20500/28304 loss=2.973 (11256s, 549ms/step)
+SFT 20750/28304 loss=3.205 (11389s, 549ms/step)
+SFT 21000/28304 loss=3.239 (11527s, 549ms/step)
+SFT 21250/28304 loss=3.028 (11664s, 549ms/step)
+SFT 21500/28304 loss=3.179 (11802s, 549ms/step)
+SFT 21750/28304 loss=3.274 (11940s, 549ms/step)
+SFT 22000/28304 loss=3.028 (12082s, 549ms/step)
+SFT 22250/28304 loss=3.112 (12220s, 549ms/step)
+SFT 22500/28304 loss=3.055 (12361s, 549ms/step)
+SFT 22750/28304 loss=2.948 (12496s, 549ms/step)
+SFT 23000/28304 loss=3.141 (12638s, 549ms/step)
+SFT 23250/28304 loss=3.283 (12772s, 549ms/step)
+SFT 23500/28304 loss=2.950 (12914s, 549ms/step)
+SFT 23750/28304 loss=2.897 (13056s, 550ms/step)
+SFT 24000/28304 loss=3.131 (13189s, 550ms/step)
+SFT 24250/28304 loss=3.120 (13327s, 550ms/step)
+SFT 24500/28304 loss=2.867 (13466s, 550ms/step)
+SFT 24750/28304 loss=2.953 (13603s, 550ms/step)
+SFT 25000/28304 loss=3.075 (13743s, 550ms/step)
+checkpoint 25000 已存
+SFT 25250/28304 loss=2.858 (13877s, 550ms/step)
+SFT 25500/28304 loss=3.108 (14015s, 550ms/step)
+SFT 25750/28304 loss=3.121 (14155s, 550ms/step)
+SFT 26000/28304 loss=3.004 (14289s, 550ms/step)
+SFT 26250/28304 loss=3.131 (14427s, 550ms/step)
+SFT 26500/28304 loss=3.056 (14562s, 550ms/step)
+SFT 26750/28304 loss=3.058 (14700s, 550ms/step)
+SFT 27000/28304 loss=3.199 (14841s, 550ms/step)
+SFT 27250/28304 loss=3.120 (14974s, 549ms/step)
+SFT 27500/28304 loss=2.939 (15113s, 550ms/step)
+SFT 27750/28304 loss=2.989 (15252s, 550ms/step)
+SFT 28000/28304 loss=2.994 (15388s, 550ms/step)
+SFT 28250/28304 loss=3.129 (15526s, 550ms/step)
+SFT 完成 15557s
+词表大小 23003
+代理词表大小 2094
+Building prefix dict from the default dictionary ...
+Loading model from cache C:\Users\Administrator\AppData\Local\Temp\jieba.cache
+Loading model cost 1.849 seconds.
+Prefix dict has been built successfully.
+
+[问] 你好
+[答] <|im_end|>
+<|im_start|><|agent|>
+很高兴见到您能提供具体的！请提供更多背景信息，我可以帮助您提供更多信息的信息或更多信息。
+<|im_end|>
+<|im_start|><|agent|>
+
+请提供更多信息，我需要
+
+[问] 人工智能是什么
+[答] <|im_end|>
+<|im_start|><|agent|>
+人工智能（Artificial Intelligence，简称AI）是一种用于机器学习计算机自动诊断和AI，它通过智能的自动驾驶和自动驾驶技术实现自动驾驶的自动驾驶技术。以下是一些基本的基本的
+
+[问] 给我讲一个关于环保的小故事
+[答] <|im_end|>
+<|im_start|><|agent|>
+好的小故事的小，我是一个关于一个非常小的话题，有一个有一个关于环保的话题的问题呢。下面是一个简单的话题，我的小问题，我的环保的
