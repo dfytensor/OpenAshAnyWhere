@@ -9,6 +9,7 @@ import torch
 import torch.nn.functional as F
 from open_ash import OpenASH
 from deepconv import apply_d2
+from deepconv_triton import apply_d2t
 
 DEV = "cuda"
 PT_CACHE = r"F:\OpenASH2605\minimind_data\pretrain_cached_1270238_256.pt"
@@ -65,6 +66,10 @@ def main():
                                                 num_heads=HEADS, num_layers=L).to(DEV), (4, 2))),
         ("d2_1_8_4_1", lambda: apply_d2(OpenASH(voc_size=VOCAB, hidden_size=H,
                                                 num_heads=HEADS, num_layers=L).to(DEV), (8, 4))),
+        ("d2t_c2", lambda: apply_d2t(OpenASH(voc_size=VOCAB, hidden_size=H,
+                                             num_heads=HEADS, num_layers=L).to(DEV), c=2)),
+        ("d2t_c4", lambda: apply_d2t(OpenASH(voc_size=VOCAB, hidden_size=H,
+                                             num_heads=HEADS, num_layers=L).to(DEV), c=4)),
     ]:
         ckpt = os.path.join(OUT, "ash30m_%s.pth" % tag)
         if os.path.exists(ckpt):

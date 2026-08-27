@@ -35,7 +35,7 @@ def eval_model(m, seqs, n_batch=100, bs=16, sl=256):
 def main():
     torch.manual_seed(0); random.seed(0)
     seqs = torch.load(PT_CACHE, map_location="cpu", weights_only=True)[:100000]
-    tags = ["linear", "convk9", "d2_1_2_1", "d2_1_4_2_1", "d2_1_8_4_1"]
+    tags = ["linear", "convk9", "d2_1_2_1", "d2_1_4_2_1", "d2_1_8_4_1", "d2t_c2", "d2t_c4"]
     for tag in tags:
         if tag == "linear":
             m = OpenASH(voc_size=VOCAB, hidden_size=H, num_heads=HEADS, num_layers=L)
@@ -44,8 +44,14 @@ def main():
             m = apply_conv_ffn(OpenASH(voc_size=VOCAB, hidden_size=H,
                                        num_heads=HEADS, num_layers=L))
         else:
-            ch = tuple(int(x) for x in tag.split("_")[2:-1])
-            m = apply_d2(OpenASH(voc_size=VOCAB, hidden_size=H, num_heads=HEADS, num_layers=L), ch)
+            tag_parts = tag.split("_")
+            if tag_parts[0] == "d2":
+                ch = tuple(int(x) for x in tag_parts[2:-1])
+                m = apply_d2(OpenASH(voc_size=VOCAB, hidden_size=H, num_heads=HEADS, num_layers=L), ch)
+            else:
+                from deepconv_triton import apply_d2t
+                m = apply_d2t(OpenASH(voc_size=VOCAB, hidden_size=H,
+                                      num_heads=HEADS, num_layers=L), c=int(tag_parts[1][1:]))
         m = m.to(DEV)
         ckpt = r"F:\OpenASH2605\copyfirst_redesign\ash30m_%s.pth" % tag
         import os

@@ -2,12 +2,21 @@
 === convk9 已存在, 跳过 ===
 === d2_1_2_1 已存在, 跳过 ===
 === d2_1_4_2_1 已存在, 跳过 ===
-=== d2_1_8_4_1 (29.86M) ===
-  d2_1_8_4_1 step 0 loss=17.947 (3s, 2753.1ms/step)
-  d2_1_8_4_1 step 500 loss=5.330 (904s, 1804.7ms/step)
-  d2_1_8_4_1 step 1000 loss=5.129 (1806s, 1804.0ms/step)
-  d2_1_8_4_1 step 1500 loss=5.239 (2708s, 1803.8ms/step)
-  d2_1_8_4_1 step 2000 loss=4.837 (3609s, 1803.8ms/step)
-  d2_1_8_4_1 step 2500 loss=4.613 (4511s, 1803.7ms/step)
-  d2_1_8_4_1 step 2999 loss=4.870 (5411s, 1803.7ms/step)
+=== d2_1_8_4_1 已存在, 跳过 ===
+=== d2t_c2 (29.86M) ===
+  d2t_c2 step 0 loss=17.947 (1s, 1048.0ms/step)
+  d2t_c2 step 500 loss=5.937 (138s, 274.9ms/step)
+  d2t_c2 step 1000 loss=5.363 (274s, 273.5ms/step)
+  d2t_c2 step 1500 loss=5.362 (420s, 279.8ms/step)
+  d2t_c2 step 2000 loss=4.878 (726s, 362.9ms/step)
+  d2t_c2 step 2500 loss=4.639 (1071s, 428.2ms/step)
+  d2t_c2 step 2999 loss=4.884 (1418s, 472.7ms/step)
+=== d2t_c4 (29.86M) ===
+  d2t_c4 step 0 loss=17.947 (12s, 11978.1ms/step)
+  d2t_c4 step 500 loss=5.938 (354s, 705.8ms/step)
+  d2t_c4 step 1000 loss=5.362 (700s, 699.4ms/step)
+  d2t_c4 step 1500 loss=5.363 (1048s, 698.3ms/step)
+  d2t_c4 step 2000 loss=4.878 (1386s, 692.5ms/step)
+  d2t_c4 step 2500 loss=4.639 (1696s, 678.0ms/step)
+  d2t_c4 step 2999 loss=4.884 (2008s, 669.2ms/step)
 完成
