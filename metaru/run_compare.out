@@ -1,0 +1,75 @@
+=== 任务1: adding T=200 (已完成, 跳过) ===
+=== 任务2: copy T=100 ===
+  copy_metaru 0/4000 loss=2.3832 eval=0.0623 (1s)
+  copy_metaru 500/4000 loss=2.0798 eval=0.0614 (136s)
+  copy_metaru 1000/4000 loss=2.0802 eval=0.0625 (263s)
+  copy_metaru 1500/4000 loss=2.0795 eval=0.0625 (398s)
+  copy_metaru 2000/4000 loss=2.0796 eval=0.0631 (531s)
+  copy_metaru 2500/4000 loss=2.0799 eval=0.0626 (666s)
+  copy_metaru 3000/4000 loss=2.0799 eval=0.0625 (798s)
+  copy_metaru 3500/4000 loss=2.0802 eval=0.0610 (928s)
+  copy_metaru 3999/4000 loss=2.0795 eval=0.0618 (1066s)
+  == copy_metaru best=0.0631 @2000 (1066s) ==
+
+  copy_gru 0/4000 loss=2.3152 eval=0.0616 (0s)
+  copy_gru 500/4000 loss=2.0802 eval=0.0628 (2s)
+  copy_gru 1000/4000 loss=2.0794 eval=0.0624 (3s)
+  copy_gru 1500/4000 loss=2.0801 eval=0.0624 (4s)
+  copy_gru 2000/4000 loss=2.0798 eval=0.0630 (6s)
+  copy_gru 2500/4000 loss=2.0796 eval=0.0637 (7s)
+  copy_gru 3000/4000 loss=2.0799 eval=0.0615 (8s)
+  copy_gru 3500/4000 loss=2.0802 eval=0.0630 (10s)
+  copy_gru 3999/4000 loss=2.0797 eval=0.0621 (11s)
+  == copy_gru best=0.0637 @2500 (11s) ==
+
+  copy_lstm 0/4000 loss=2.3062 eval=0.0621 (0s)
+  copy_lstm 500/4000 loss=2.0799 eval=0.0612 (1s)
+  copy_lstm 1000/4000 loss=2.0796 eval=0.0607 (3s)
+  copy_lstm 1500/4000 loss=2.0797 eval=0.0624 (4s)
+  copy_lstm 2000/4000 loss=2.0798 eval=0.0631 (6s)
+  copy_lstm 2500/4000 loss=2.0799 eval=0.0616 (7s)
+  copy_lstm 3000/4000 loss=2.0799 eval=0.0615 (9s)
+  copy_lstm 3500/4000 loss=2.0799 eval=0.0625 (10s)
+  copy_lstm 3999/4000 loss=2.0799 eval=0.0621 (11s)
+  == copy_lstm best=0.0631 @2000 (11s) ==
+
+=== 任务3: char-LM ctx=128 ===
+  语料字符数: 1500000, vocab: 2771
+  lm_metaru 0/3000 loss=7.9669 eval=7.8010 (0s)
+  lm_metaru 500/3000 loss=3.2816 eval=3.2160 (99s)
+  lm_metaru 1000/3000 loss=2.7927 eval=2.8171 (197s)
+  lm_metaru 1500/3000 loss=2.6260 eval=2.6315 (299s)
+  lm_metaru 2000/3000 loss=2.6016 eval=2.5014 (397s)
+  lm_metaru 2500/3000 loss=2.5115 eval=2.4224 (496s)
+  lm_metaru 2999/3000 loss=2.2947 eval=2.3510 (596s)
+  == lm_metaru best=2.3510 @2999 (596s) ==
+
+  lm_gru 0/3000 loss=7.9359 eval=7.8784 (0s)
+  lm_gru 500/3000 loss=2.6343 eval=2.5895 (9s)
+  lm_gru 1000/3000 loss=2.1916 eval=2.2285 (18s)
+  lm_gru 1500/3000 loss=2.0404 eval=2.0511 (28s)
+  lm_gru 2000/3000 loss=2.0217 eval=1.9258 (38s)
+  lm_gru 2500/3000 loss=1.8964 eval=1.8470 (48s)
+  lm_gru 2999/3000 loss=1.7509 eval=1.7853 (58s)
+  == lm_gru best=1.7853 @2999 (58s) ==
+
+  lm_lstm 0/3000 loss=7.9340 eval=7.9037 (0s)
+  lm_lstm 500/3000 loss=2.9904 eval=2.9399 (9s)
+  lm_lstm 1000/3000 loss=2.4661 eval=2.5018 (18s)
+  lm_lstm 1500/3000 loss=2.2823 eval=2.2746 (27s)
+  lm_lstm 2000/3000 loss=2.2172 eval=2.1218 (37s)
+  lm_lstm 2500/3000 loss=2.0796 eval=2.0160 (46s)
+  lm_lstm 2999/3000 loss=1.8784 eval=1.9324 (56s)
+  == lm_lstm best=1.9324 @2999 (56s) ==
+
+
+===== 汇总 =====
+  add_metaru: best=0.0081 @step 2000 (5521s)
+  add_gru: best=0.0001 @step 3500 (170s)
+  add_lstm: best=0.0080 @step 1000 (206s)
+  copy_metaru: best=0.0631 @step 2000 (1066s)
+  copy_gru: best=0.0637 @step 2500 (11s)
+  copy_lstm: best=0.0631 @step 2000 (11s)
+  lm_metaru: best=2.3510 @step 2999 (596s)
+  lm_gru: best=1.7853 @step 2999 (58s)
+  lm_lstm: best=1.9324 @step 2999 (56s)
