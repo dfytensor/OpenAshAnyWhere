@@ -1,0 +1,256 @@
+=== Meta-RU 变体扫描 ===
+  metaru_v0_base_lr0.001 0/2500 loss=0.4653 eval=0.1969 (1s)
+  metaru_v0_base_lr0.001 500/2500 loss=0.0090 eval=0.0085 (120s)
+  metaru_v0_base_lr0.001 1000/2500 loss=0.0092 eval=0.0082 (235s)
+  metaru_v0_base_lr0.001 1500/2500 loss=0.0092 eval=0.0086 (348s)
+  metaru_v0_base_lr0.001 2000/2500 loss=0.0091 eval=0.0081 (464s)
+  metaru_v0_base_lr0.001 2499/2500 loss=0.0076 eval=0.0101 (803s)
+  == metaru_v0_base_lr0.001 best=0.00815 (803s) ==
+
+  metaru_v0_base_lr0.0003 0/2500 loss=0.4653 eval=0.4295 (2s)
+  metaru_v0_base_lr0.0003 500/2500 loss=0.0089 eval=0.0084 (661s)
+  metaru_v0_base_lr0.0003 1000/2500 loss=0.0091 eval=0.0081 (1317s)
+  metaru_v0_base_lr0.0003 1500/2500 loss=0.0092 eval=0.0083 (1987s)
+  metaru_v0_base_lr0.0003 2000/2500 loss=0.0091 eval=0.0081 (2638s)
+  metaru_v0_base_lr0.0003 2499/2500 loss=0.0078 eval=0.0086 (3313s)
+  == metaru_v0_base_lr0.0003 best=0.00809 (3313s) ==
+
+  metaru_v1_eta0_lr0.001 0/2500 loss=0.3891 eval=0.1837 (2s)
+  metaru_v1_eta0_lr0.001 500/2500 loss=0.0090 eval=0.0085 (600s)
+  metaru_v1_eta0_lr0.001 1000/2500 loss=0.0090 eval=0.0080 (1193s)
+  metaru_v1_eta0_lr0.001 1500/2500 loss=0.0091 eval=0.0085 (1747s)
+  metaru_v1_eta0_lr0.001 2000/2500 loss=0.0090 eval=0.0080 (2291s)
+  metaru_v1_eta0_lr0.001 2499/2500 loss=0.0075 eval=0.0090 (2888s)
+  == metaru_v1_eta0_lr0.001 best=0.00800 (2888s) ==
+
+  metaru_v1_eta0_lr0.0003 0/2500 loss=0.3891 eval=0.3285 (2s)
+  metaru_v1_eta0_lr0.0003 500/2500 loss=0.0088 eval=0.0084 (602s)
+  metaru_v1_eta0_lr0.0003 1000/2500 loss=0.0091 eval=0.0080 (1214s)
+  metaru_v1_eta0_lr0.0003 1500/2500 loss=0.0092 eval=0.0085 (1777s)
+  metaru_v1_eta0_lr0.0003 2000/2500 loss=0.0086 eval=0.0079 (2347s)
+  metaru_v1_eta0_lr0.0003 2499/2500 loss=0.0077 eval=0.0085 (2913s)
+  == metaru_v1_eta0_lr0.0003 best=0.00786 (2913s) ==
+
+  metaru_v2_eta0_ga_lr0.001 0/2500 loss=0.1872 eval=0.0896 (2s)
+  metaru_v2_eta0_ga_lr0.001 500/2500 loss=0.0088 eval=0.0084 (608s)
+  metaru_v2_eta0_ga_lr0.001 1000/2500 loss=0.0088 eval=0.0078 (1241s)
+  metaru_v2_eta0_ga_lr0.001 1500/2500 loss=0.0094 eval=0.0085 (1827s)
+  metaru_v2_eta0_ga_lr0.001 2000/2500 loss=0.0057 eval=0.0053 (2457s)
+  metaru_v2_eta0_ga_lr0.001 2499/2500 loss=0.0001 eval=0.0001 (2967s)
+  == metaru_v2_eta0_ga_lr0.001 best=0.00009 (2967s) ==
+
+  metaru_v2_eta0_ga_lr0.0003 0/2500 loss=0.1872 eval=0.1597 (1s)
+  metaru_v2_eta0_ga_lr0.0003 500/2500 loss=0.0087 eval=0.0083 (559s)
+  metaru_v2_eta0_ga_lr0.0003 1000/2500 loss=0.0087 eval=0.0078 (1074s)
+  metaru_v2_eta0_ga_lr0.0003 1500/2500 loss=0.0087 eval=0.0081 (1598s)
+  metaru_v2_eta0_ga_lr0.0003 2000/2500 loss=0.0059 eval=0.0058 (2158s)
+  metaru_v2_eta0_ga_lr0.0003 2499/2500 loss=0.0075 eval=0.0083 (2723s)
+  == metaru_v2_eta0_ga_lr0.0003 best=0.00583 (2723s) ==
+
+  metaru_v3_eta0_ga_noclamp_lr0.001 0/2500 loss=nan eval=nan (2s)
+  metaru_v3_eta0_ga_noclamp_lr0.001 500/2500 loss=nan eval=nan (505s)
+  metaru_v3_eta0_ga_noclamp_lr0.001 1000/2500 loss=nan eval=nan (1022s)
+  metaru_v3_eta0_ga_noclamp_lr0.001 1500/2500 loss=nan eval=nan (1532s)
+  metaru_v3_eta0_ga_noclamp_lr0.001 2000/2500 loss=nan eval=nan (2051s)
+  metaru_v3_eta0_ga_noclamp_lr0.001 2499/2500 loss=nan eval=nan (2584s)
+  == metaru_v3_eta0_ga_noclamp_lr0.001 best=nan (2584s) ==
+
+  metaru_v3_eta0_ga_noclamp_lr0.0003 0/2500 loss=nan eval=nan (1s)
+  metaru_v3_eta0_ga_noclamp_lr0.0003 500/2500 loss=nan eval=nan (517s)
+  metaru_v3_eta0_ga_noclamp_lr0.0003 1000/2500 loss=nan eval=nan (1004s)
+  metaru_v3_eta0_ga_noclamp_lr0.0003 1500/2500 loss=nan eval=nan (1499s)
+  metaru_v3_eta0_ga_noclamp_lr0.0003 2000/2500 loss=nan eval=nan (2031s)
+  metaru_v3_eta0_ga_noclamp_lr0.0003 2499/2500 loss=nan eval=nan (2581s)
+  == metaru_v3_eta0_ga_noclamp_lr0.0003 best=nan (2581s) ==
+
+  metaru_v4_eta005_ga_noclamp_lr0.001 0/2500 loss=nan eval=nan (2s)
+  metaru_v4_eta005_ga_noclamp_lr0.001 500/2500 loss=nan eval=nan (480s)
+  metaru_v4_eta005_ga_noclamp_lr0.001 1000/2500 loss=nan eval=nan (947s)
+  metaru_v4_eta005_ga_noclamp_lr0.001 1500/2500 loss=nan eval=nan (1621s)
+  metaru_v4_eta005_ga_noclamp_lr0.001 2000/2500 loss=nan eval=nan (2423s)
+  metaru_v4_eta005_ga_noclamp_lr0.001 2499/2500 loss=nan eval=nan (2957s)
+  == metaru_v4_eta005_ga_noclamp_lr0.001 best=nan (2957s) ==
+
+  metaru_v4_eta005_ga_noclamp_lr0.0003 0/2500 loss=nan eval=nan (2s)
+  metaru_v4_eta005_ga_noclamp_lr0.0003 500/2500 loss=nan eval=nan (566s)
+  metaru_v4_eta005_ga_noclamp_lr0.0003 1000/2500 loss=nan eval=nan (1113s)
+  metaru_v4_eta005_ga_noclamp_lr0.0003 1500/2500 loss=nan eval=nan (1658s)
+  metaru_v4_eta005_ga_noclamp_lr0.0003 2000/2500 loss=nan eval=nan (2186s)
+  metaru_v4_eta005_ga_noclamp_lr0.0003 2499/2500 loss=nan eval=nan (2729s)
+  == metaru_v4_eta005_ga_noclamp_lr0.0003 best=nan (2729s) ==
+
+  metaru_v5_eta0_ga_rinit05_lr0.001 0/2500 loss=0.1575 eval=0.0774 (1s)
+  metaru_v5_eta0_ga_rinit05_lr0.001 500/2500 loss=0.0087 eval=0.0082 (532s)
+  metaru_v5_eta0_ga_rinit05_lr0.001 1000/2500 loss=0.0104 eval=0.0089 (1073s)
+  metaru_v5_eta0_ga_rinit05_lr0.001 1500/2500 loss=0.0060 eval=0.0053 (1592s)
+  metaru_v5_eta0_ga_rinit05_lr0.001 2000/2500 loss=0.0009 eval=0.0010 (2127s)
+  metaru_v5_eta0_ga_rinit05_lr0.001 2499/2500 loss=0.0001 eval=0.0002 (2666s)
+  == metaru_v5_eta0_ga_rinit05_lr0.001 best=0.00016 (2666s) ==
+
+  metaru_v5_eta0_ga_rinit05_lr0.0003 0/2500 loss=0.1575 eval=0.1358 (2s)
+  metaru_v5_eta0_ga_rinit05_lr0.0003 500/2500 loss=0.0086 eval=0.0083 (594s)
+  metaru_v5_eta0_ga_rinit05_lr0.0003 1000/2500 loss=0.0088 eval=0.0078 (1172s)
+  metaru_v5_eta0_ga_rinit05_lr0.0003 1500/2500 loss=0.0092 eval=0.0081 (1814s)
+  metaru_v5_eta0_ga_rinit05_lr0.0003 2000/2500 loss=0.0089 eval=0.0080 (2442s)
+  metaru_v5_eta0_ga_rinit05_lr0.0003 2499/2500 loss=0.0077 eval=0.0081 (3087s)
+  == metaru_v5_eta0_ga_rinit05_lr0.0003 best=0.00779 (3087s) ==
+
+=== GRU / LSTM 超参扫描 ===
+  gru_lr0.001_L1_d128 0/2500 loss=0.0097 eval=0.0100 (0s)
+  gru_lr0.001_L1_d128 500/2500 loss=0.0089 eval=0.0084 (21s)
+  gru_lr0.001_L1_d128 1000/2500 loss=0.0089 eval=0.0080 (47s)
+  gru_lr0.001_L1_d128 1500/2500 loss=0.0092 eval=0.0083 (78s)
+  gru_lr0.001_L1_d128 2000/2500 loss=0.0091 eval=0.0081 (108s)
+  gru_lr0.001_L1_d128 2499/2500 loss=0.0075 eval=0.0086 (138s)
+  == gru_lr0.001_L1_d128 best=0.00801 (138s) ==
+
+  gru_lr0.001_L1_d256 0/2500 loss=0.0108 eval=0.0091 (1s)
+  gru_lr0.001_L1_d256 500/2500 loss=0.0089 eval=0.0084 (48s)
+  gru_lr0.001_L1_d256 1000/2500 loss=0.0089 eval=0.0080 (87s)
+  gru_lr0.001_L1_d256 1500/2500 loss=0.0092 eval=0.0083 (120s)
+  gru_lr0.001_L1_d256 2000/2500 loss=0.0091 eval=0.0081 (164s)
+  gru_lr0.001_L1_d256 2499/2500 loss=0.0073 eval=0.0083 (208s)
+  == gru_lr0.001_L1_d256 best=0.00802 (208s) ==
+
+  gru_lr0.001_L2_d128 0/2500 loss=0.0153 eval=0.0093 (0s)
+  gru_lr0.001_L2_d128 500/2500 loss=0.0090 eval=0.0085 (26s)
+  gru_lr0.001_L2_d128 1000/2500 loss=0.0089 eval=0.0080 (51s)
+  gru_lr0.001_L2_d128 1500/2500 loss=0.0092 eval=0.0083 (81s)
+  gru_lr0.001_L2_d128 2000/2500 loss=0.0000 eval=0.0000 (111s)
+  gru_lr0.001_L2_d128 2499/2500 loss=0.0000 eval=0.0000 (140s)
+  == gru_lr0.001_L2_d128 best=0.00002 (140s) ==
+
+  gru_lr0.001_L2_d256 0/2500 loss=0.0097 eval=0.0274 (0s)
+  gru_lr0.001_L2_d256 500/2500 loss=0.0089 eval=0.0085 (78s)
+  gru_lr0.001_L2_d256 1000/2500 loss=0.0089 eval=0.0080 (131s)
+  gru_lr0.001_L2_d256 1500/2500 loss=0.0092 eval=0.0083 (199s)
+  gru_lr0.001_L2_d256 2000/2500 loss=0.0068 eval=0.0063 (262s)
+  gru_lr0.001_L2_d256 2499/2500 loss=0.0000 eval=0.0000 (341s)
+  == gru_lr0.001_L2_d256 best=0.00003 (341s) ==
+
+  gru_lr0.0003_L1_d128 0/2500 loss=0.0097 eval=0.0091 (0s)
+  gru_lr0.0003_L1_d128 500/2500 loss=0.0089 eval=0.0084 (27s)
+  gru_lr0.0003_L1_d128 1000/2500 loss=0.0089 eval=0.0080 (56s)
+  gru_lr0.0003_L1_d128 1500/2500 loss=0.0092 eval=0.0084 (83s)
+  gru_lr0.0003_L1_d128 2000/2500 loss=0.0091 eval=0.0081 (108s)
+  gru_lr0.0003_L1_d128 2499/2500 loss=0.0077 eval=0.0087 (125s)
+  == gru_lr0.0003_L1_d128 best=0.00801 (125s) ==
+
+  gru_lr0.0003_L1_d256 0/2500 loss=0.0108 eval=0.0099 (0s)
+  gru_lr0.0003_L1_d256 500/2500 loss=0.0089 eval=0.0084 (34s)
+  gru_lr0.0003_L1_d256 1000/2500 loss=0.0089 eval=0.0080 (79s)
+  gru_lr0.0003_L1_d256 1500/2500 loss=0.0092 eval=0.0084 (122s)
+  gru_lr0.0003_L1_d256 2000/2500 loss=0.0091 eval=0.0081 (158s)
+  gru_lr0.0003_L1_d256 2499/2500 loss=0.0077 eval=0.0087 (208s)
+  == gru_lr0.0003_L1_d256 best=0.00801 (208s) ==
+
+  gru_lr0.0003_L2_d128 0/2500 loss=0.0153 eval=0.0105 (0s)
+  gru_lr0.0003_L2_d128 500/2500 loss=0.0089 eval=0.0085 (31s)
+  gru_lr0.0003_L2_d128 1000/2500 loss=0.0088 eval=0.0080 (62s)
+  gru_lr0.0003_L2_d128 1500/2500 loss=0.0092 eval=0.0084 (92s)
+  gru_lr0.0003_L2_d128 2000/2500 loss=0.0091 eval=0.0081 (120s)
+  gru_lr0.0003_L2_d128 2499/2500 loss=0.0077 eval=0.0087 (143s)
+  == gru_lr0.0003_L2_d128 best=0.00800 (143s) ==
+
+  gru_lr0.0003_L2_d256 0/2500 loss=0.0097 eval=0.0095 (0s)
+  gru_lr0.0003_L2_d256 500/2500 loss=0.0089 eval=0.0085 (56s)
+  gru_lr0.0003_L2_d256 1000/2500 loss=0.0089 eval=0.0080 (131s)
+  gru_lr0.0003_L2_d256 1500/2500 loss=0.0092 eval=0.0084 (196s)
+  gru_lr0.0003_L2_d256 2000/2500 loss=0.0091 eval=0.0081 (274s)
+  gru_lr0.0003_L2_d256 2499/2500 loss=0.0077 eval=0.0087 (350s)
+  == gru_lr0.0003_L2_d256 best=0.00801 (350s) ==
+
+  lstm_lr0.001_L1_d128 0/2500 loss=0.0172 eval=0.0115 (0s)
+  lstm_lr0.001_L1_d128 500/2500 loss=0.0089 eval=0.0084 (19s)
+  lstm_lr0.001_L1_d128 1000/2500 loss=0.0089 eval=0.0080 (37s)
+  lstm_lr0.001_L1_d128 1500/2500 loss=0.0092 eval=0.0084 (57s)
+  lstm_lr0.001_L1_d128 2000/2500 loss=0.0091 eval=0.0081 (85s)
+  lstm_lr0.001_L1_d128 2499/2500 loss=0.0077 eval=0.0087 (113s)
+  == lstm_lr0.001_L1_d128 best=0.00801 (113s) ==
+
+  lstm_lr0.001_L1_d256 0/2500 loss=0.0096 eval=0.0095 (1s)
+  lstm_lr0.001_L1_d256 500/2500 loss=0.0089 eval=0.0084 (41s)
+  lstm_lr0.001_L1_d256 1000/2500 loss=0.0090 eval=0.0080 (81s)
+  lstm_lr0.001_L1_d256 1500/2500 loss=0.0092 eval=0.0083 (131s)
+  lstm_lr0.001_L1_d256 2000/2500 loss=0.0091 eval=0.0081 (178s)
+  lstm_lr0.001_L1_d256 2499/2500 loss=0.0077 eval=0.0087 (225s)
+  == lstm_lr0.001_L1_d256 best=0.00803 (225s) ==
+
+  lstm_lr0.001_L2_d128 0/2500 loss=0.0140 eval=0.0093 (1s)
+  lstm_lr0.001_L2_d128 500/2500 loss=0.0089 eval=0.0084 (26s)
+  lstm_lr0.001_L2_d128 1000/2500 loss=0.0089 eval=0.0080 (45s)
+  lstm_lr0.001_L2_d128 1500/2500 loss=0.0092 eval=0.0083 (66s)
+  lstm_lr0.001_L2_d128 2000/2500 loss=0.0091 eval=0.0081 (92s)
+  lstm_lr0.001_L2_d128 2499/2500 loss=0.0077 eval=0.0086 (121s)
+  == lstm_lr0.001_L2_d128 best=0.00801 (121s) ==
+
+  lstm_lr0.001_L2_d256 0/2500 loss=0.0116 eval=0.0094 (1s)
+  lstm_lr0.001_L2_d256 500/2500 loss=0.0089 eval=0.0084 (65s)
+  lstm_lr0.001_L2_d256 1000/2500 loss=0.0090 eval=0.0080 (141s)
+  lstm_lr0.001_L2_d256 1500/2500 loss=0.0092 eval=0.0083 (214s)
+  lstm_lr0.001_L2_d256 2000/2500 loss=0.0091 eval=0.0081 (279s)
+  lstm_lr0.001_L2_d256 2499/2500 loss=0.0077 eval=0.0086 (335s)
+  == lstm_lr0.001_L2_d256 best=0.00802 (335s) ==
+
+  lstm_lr0.0003_L1_d128 0/2500 loss=0.0172 eval=0.0136 (0s)
+  lstm_lr0.0003_L1_d128 500/2500 loss=0.0089 eval=0.0084 (29s)
+  lstm_lr0.0003_L1_d128 1000/2500 loss=0.0089 eval=0.0080 (54s)
+  lstm_lr0.0003_L1_d128 1500/2500 loss=0.0092 eval=0.0083 (79s)
+  lstm_lr0.0003_L1_d128 2000/2500 loss=0.0091 eval=0.0081 (100s)
+  lstm_lr0.0003_L1_d128 2499/2500 loss=0.0076 eval=0.0087 (130s)
+  == lstm_lr0.0003_L1_d128 best=0.00800 (130s) ==
+
+  lstm_lr0.0003_L1_d256 0/2500 loss=0.0096 eval=0.0090 (1s)
+  lstm_lr0.0003_L1_d256 500/2500 loss=0.0089 eval=0.0084 (49s)
+  lstm_lr0.0003_L1_d256 1000/2500 loss=0.0090 eval=0.0080 (99s)
+  lstm_lr0.0003_L1_d256 1500/2500 loss=0.0092 eval=0.0083 (147s)
+  lstm_lr0.0003_L1_d256 2000/2500 loss=0.0091 eval=0.0081 (179s)
+  lstm_lr0.0003_L1_d256 2499/2500 loss=0.0076 eval=0.0087 (211s)
+  == lstm_lr0.0003_L1_d256 best=0.00802 (211s) ==
+
+  lstm_lr0.0003_L2_d128 0/2500 loss=0.0140 eval=0.0109 (0s)
+  lstm_lr0.0003_L2_d128 500/2500 loss=0.0089 eval=0.0084 (31s)
+  lstm_lr0.0003_L2_d128 1000/2500 loss=0.0089 eval=0.0080 (59s)
+  lstm_lr0.0003_L2_d128 1500/2500 loss=0.0092 eval=0.0083 (86s)
+  lstm_lr0.0003_L2_d128 2000/2500 loss=0.0091 eval=0.0081 (107s)
+  lstm_lr0.0003_L2_d128 2499/2500 loss=0.0076 eval=0.0087 (133s)
+  == lstm_lr0.0003_L2_d128 best=0.00801 (133s) ==
+
+  lstm_lr0.0003_L2_d256 0/2500 loss=0.0116 eval=0.0101 (1s)
+  lstm_lr0.0003_L2_d256 500/2500 loss=0.0089 eval=0.0084 (81s)
+  lstm_lr0.0003_L2_d256 1000/2500 loss=0.0089 eval=0.0080 (158s)
+  lstm_lr0.0003_L2_d256 1500/2500 loss=0.0092 eval=0.0083 (213s)
+  lstm_lr0.0003_L2_d256 2000/2500 loss=0.0091 eval=0.0081 (284s)
+  lstm_lr0.0003_L2_d256 2499/2500 loss=0.0076 eval=0.0087 (349s)
+  == lstm_lr0.0003_L2_d256 best=0.00801 (349s) ==
+
+
+===== 汇总 (adding T=200, 按 best 排序) =====
+  gru_lr0.001_L2_d128              best=0.00002 (140s)
+  gru_lr0.001_L2_d256              best=0.00003 (341s)
+  metaru_v2_eta0_ga_lr0.001        best=0.00009 (2967s)
+  metaru_v5_eta0_ga_rinit05_lr0.001 best=0.00016 (2666s)
+  metaru_v2_eta0_ga_lr0.0003       best=0.00583 (2723s)
+  metaru_v5_eta0_ga_rinit05_lr0.0003 best=0.00779 (3087s)
+  metaru_v1_eta0_lr0.0003          best=0.00786 (2913s)
+  metaru_v1_eta0_lr0.001           best=0.00800 (2888s)
+  gru_lr0.0003_L2_d128             best=0.00800 (143s)
+  lstm_lr0.0003_L1_d128            best=0.00800 (130s)
+  gru_lr0.0003_L1_d128             best=0.00801 (125s)
+  lstm_lr0.001_L2_d128             best=0.00801 (121s)
+  lstm_lr0.0003_L2_d256            best=0.00801 (349s)
+  lstm_lr0.0003_L2_d128            best=0.00801 (133s)
+  lstm_lr0.001_L1_d128             best=0.00801 (113s)
+  gru_lr0.001_L1_d128              best=0.00801 (138s)
+  metaru_v0_base_lr0.0003          best=0.00809 (3313s)
+  metaru_v0_base_lr0.001           best=0.00815 (803s)
+  metaru_v3_eta0_ga_noclamp_lr0.001 best=nan (2584s)
+  metaru_v3_eta0_ga_noclamp_lr0.0003 best=nan (2581s)
+  metaru_v4_eta005_ga_noclamp_lr0.001 best=nan (2957s)
+  metaru_v4_eta005_ga_noclamp_lr0.0003 best=nan (2729s)
+  gru_lr0.0003_L2_d256             best=0.00801 (350s)
+  gru_lr0.0003_L1_d256             best=0.00801 (208s)
+  lstm_lr0.001_L2_d256             best=0.00802 (335s)
+  gru_lr0.001_L1_d256              best=0.00802 (208s)
+  lstm_lr0.0003_L1_d256            best=0.00802 (211s)
+  lstm_lr0.001_L1_d256             best=0.00803 (225s)
