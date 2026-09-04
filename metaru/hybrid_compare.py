@@ -46,25 +46,19 @@ class HybridLM(nn.Module):
 
 
 def chaos_batch(b, T, device):
-    """logistic 轨道判别: 周期区(r<3.57)=0, 混沌区(r>3.57)=1."""
-    us = torch.zeros(b, T, device=device)
-    ys = torch.zeros(b, dtype=torch.long, device=device)
-    for i in range(b):
-        if torch.rand(1).item() < 0.5:
-            r = 2.9 + torch.rand(1).item() * 0.5
-            ys[i] = 0
-        else:
-            r = 3.7 + torch.rand(1).item() * 0.3
-            ys[i] = 1
-        xx = torch.rand(1).item()
-        traj = []
-        for _ in range(150 + T):
-            xx = r * xx * (1 - xx)
-        for _ in range(T):
-            xx = r * xx * (1 - xx)
-            traj.append(xx)
-        us[i] = torch.tensor(traj, device=device)
-    return us.unsqueeze(-1), ys
+    """logistic 轨道判别: 周期区(r<3.57)=0, 混沌区(r>3.57)=1. 向量化 GPU 生成."""
+    half = torch.rand(b, device=device) < 0.5
+    r = torch.where(half, 2.9 + 0.5 * torch.rand(b, device=device),
+                    3.7 + 0.3 * torch.rand(b, device=device))
+    ys = (r > 3.57).long()
+    x = torch.rand(b, device=device)
+    for _ in range(150):
+        x = r * x * (1 - x)
+    out = []
+    for _ in range(T):
+        x = r * x * (1 - x)
+        out.append(x)
+    return torch.stack(out, 1).unsqueeze(-1), ys
 
 
 def run(tag, model_fn, steps, batch_fn, loss_fn, eval_fn, eval_every=500, mode="min", seeds=(0, 1)):

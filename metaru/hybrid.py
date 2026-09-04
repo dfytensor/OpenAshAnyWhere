@@ -1,14 +1,6 @@
-"""Meta-GRU 混合体 (来自 metaru_vs_gru 报告的设计) + 修正版 Meta-RU (v2).
+"""Meta-GRU 混合体 (繁殖项进重置门) + 修正版 Meta-RU (v2) — 融合投影加速版.
 
-MetaGRU: 繁殖项 R·h(1-h) 只进重置门预激活 (策略层), 候选态纯 tanh (内容层):
-    r_t = sigmoid(Wr h + Ur u + b + scale·R·h(1-h))
-    z_t = sigmoid(Wz h + Uz u + b)
-    c_t = tanh(Wc(r h) + Uc u + b)
-    h_t = z h + (1-z) c
-    R   <- clamp(R + eta R (rho - h), 0.1, 4)
-
-MetaRU-v2 (我方修正): g 用门控 r 缩放 (非 R≈3.5), R 走 logit 偏置, eta=0:
-    h_t = (1-r) h + r (g + a),  g = r h (1-h)
+融合: z/r 门共用一次 h 投影 + u 侧投影全序列预计算 (每步仅 2 次 GEMM).
 """
 import torch
 import torch.nn as nn
@@ -24,64 +16,60 @@ class MetaGRUCell(nn.Module):
         self.scale = scale
         self.eta, self.rho = eta, rho
         self.r_min, self.r_max = r_min, r_max
-        self.Wr = nn.Linear(d, d)
-        self.Ur = nn.Linear(m, d)
-        self.Wz = nn.Linear(d, d)
-        self.Uz = nn.Linear(m, d)
+        self.Wzr = nn.Linear(d, 2 * d)          # h -> (z_pre, r_pre)
+        self.Uzr = nn.Linear(m, 2 * d)
         self.Wc = nn.Linear(d, d)
         self.Uc = nn.Linear(m, d)
-        self.register_buffer("R", torch.full((d,), float(r_init)))
+        self.register_buffer("R", torch.full((1, d), float(r_init)))
 
     def reset(self, b, device):
-        self.R = torch.full((b, self.d), 3.5, device=device)
+        self.R.fill_(3.5)
 
     def forward(self, u_seq, h=None):
         b, T, _ = u_seq.shape
         if h is None:
             h = torch.zeros(b, self.d, device=u_seq.device, dtype=u_seq.dtype)
         self.reset(b, u_seq.device)
-        ur, uz, uc = self.Ur(u_seq), self.Uz(u_seq), self.Uc(u_seq)
+        uzr, uc = self.Uzr(u_seq), self.Uc(u_seq)      # 全序列预计算
         hs = []
         for t in range(T):
+            z_pre, r_pre = (self.Wzr(h) + uzr[:, t]).chunk(2, -1)
             repro = self.scale * self.R * h * (1 - h)
             if self.mode == "reset":
-                r = torch.sigmoid(self.Wr(h) + ur[:, t] + repro)
-            else:
-                r = torch.sigmoid(self.Wr(h) + ur[:, t])
-            z = torch.sigmoid(self.Wz(h) + uz[:, t])
+                r_pre = r_pre + repro
+            r = torch.sigmoid(r_pre)
+            z = torch.sigmoid(z_pre)
             pre = self.Wc(r * h) + uc[:, t] + (repro if self.mode == "pre" else 0.0)
-            c = torch.tanh(pre)
-            h = z * h + (1 - z) * c
+            h = z * h + (1 - z) * torch.tanh(pre)
             with torch.no_grad():
-                self.R += self.eta * self.R * (self.rho - h)
+                self.R += self.eta * self.R * (self.rho - h.float().mean(0, keepdim=True))
                 self.R.clamp_(self.r_min, self.r_max)
             hs.append(h)
         return torch.stack(hs, 1)
 
 
 class MetaRU2Cell(nn.Module):
-    """修正版 Meta-RU (v2): g 用门控 r 缩放, R 走 logit 偏置, eta=0."""
+    """修正版 Meta-RU (v2): g 用门控 r 缩放, R 走 logit 偏置. 融合投影."""
 
     def __init__(self, m, d, r_init=0.875, clamp_h=True, eta=0.0, rho=0.5):
         super().__init__()
         self.d = d
-        self.Wr = nn.Linear(d, d)
-        self.Ur = nn.Linear(m, d)
-        self.W = nn.Linear(d, d, bias=False)
-        self.U = nn.Linear(m, d)
-        self.register_buffer("R", torch.full((d,), float(r_init)))
         self.clamp_h = clamp_h
+        self.Wh = nn.Linear(d, 2 * d)           # h -> (W_r h + b_r, W_a h)
+        self.Wa_bias = nn.Parameter(torch.zeros(d))
+        self.Uu = nn.Linear(m, 2 * d)           # u -> (U_r u, U_a u)
 
     def forward(self, u_seq, h=None):
         b, T, _ = u_seq.shape
         if h is None:
             h = torch.zeros(b, self.d, device=u_seq.device, dtype=u_seq.dtype)
-        ur, uu = self.Ur(u_seq), self.U(u_seq)
+        pru = self.Uu(u_seq)                    # 全序列预计算
         hs = []
         for t in range(T):
-            r = torch.sigmoid(self.Wr(h) + ur[:, t] + 2.0 * self.R - 1.0)
+            r_pre, a = (self.Wh(h) + pru[:, t]).chunk(2, -1)
+            r = torch.sigmoid(r_pre + 2.0 * self.R - 1.0)
             g = r * h * (1 - h)
-            h = (1 - r) * h + r * (g + self.W(h) + uu[:, t])
+            h = (1 - r) * h + r * (g + self.Wa_bias + a)
             if self.clamp_h:
                 h = h.clamp(0, 1)
             hs.append(h)

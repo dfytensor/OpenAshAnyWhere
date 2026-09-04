@@ -62,6 +62,8 @@ class SeqModel(nn.Module):
             self.cell = MetaRUCell(m, d, **kw)
         elif kind == "gru":
             self.cell = nn.GRU(m, d, batch_first=True, num_layers=kw.get("layers", 1))
+        elif kind == "gru2":
+            self.cell = nn.GRU(m, d, batch_first=True, num_layers=2)
         elif kind == "lstm":
             self.cell = nn.LSTM(m, d, batch_first=True, num_layers=kw.get("layers", 1))
         else:
@@ -89,6 +91,8 @@ class LMModel(nn.Module):
             self.cell = MetaRUCell(d, d, **kw)
         elif kind == "gru":
             self.cell = nn.GRU(d, d, batch_first=True, num_layers=kw.get("layers", 1))
+        elif kind == "gru2":
+            self.cell = nn.GRU(d, d, batch_first=True, num_layers=2)
         elif kind == "lstm":
             self.cell = nn.LSTM(d, d, batch_first=True, num_layers=kw.get("layers", 1))
         self.head = nn.Linear(d, vocab)
