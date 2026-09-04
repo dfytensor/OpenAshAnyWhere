@@ -1,0 +1,26 @@
+语料 1500000 字符 vocab 2771
+gru 就绪 (131s)
+gru2 就绪 (138s)
+lstm 就绪 (124s)
+metagru 就绪 (557s)
+xgru 就绪 (466s)
+
+=== ① 长上下文外推 (CE, 训练 ctx=128) ===
+  ctx= 128: gru=2.368  gru2=2.371  lstm=2.682  metagru=2.339  xgru=2.324
+  ctx= 256: gru=2.355  gru2=2.340  lstm=2.722  metagru=2.338  xgru=2.363
+  ctx= 512: gru=2.363  gru2=2.379  lstm=2.696  metagru=2.345  xgru=2.267
+  ctx=1024: gru=2.324  gru2=2.403  lstm=2.654  metagru=2.358  xgru=2.329
+
+=== ② 流内寻针 (4 位密钥回忆 ACC) ===
+  流长= 256: gru=0%  gru2=0%  lstm=0%  metagru=0%  xgru=0%
+  流长=1024: gru=0%  gru2=0%  lstm=0%  metagru=0%  xgru=0%
+  流长=2048: gru=0%  gru2=0%  lstm=0%  metagru=0%  xgru=0%
+
+=== ③ 生成质量 (贪婪 400 字) ===
+  gru: distinct2=0.266 最长重复游程=1
+  gru2: distinct2=0.148 最长重复游程=1
+  lstm: distinct2=0.060 最长重复游程=1
+  metagru: distinct2=0.075 最长重复游程=1
+  xgru: distinct2=0.288 最长重复游程=1
+
+完成
