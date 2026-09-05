@@ -15,12 +15,13 @@ import torch.nn as nn
 
 class MXGRUCell(nn.Module):
     def __init__(self, m, d, eta=0.02, rho=0.5, r_min=0.1, r_max=4.0,
-                 scale_r=1.0, scale_d=1.0, z_bias=1.0):
+                 scale_r=1.0, scale_d=1.0, z_bias=1.0, mode="always"):
         super().__init__()
         self.d = d
         self.eta, self.rho = eta, rho
         self.r_min, self.r_max = r_min, r_max
         self.scale_r, self.scale_d = scale_r, scale_d
+        self.mode = mode          # always / rup (diag 随 R 升强) / rdn (随 R 降强)
         self.Wzr = nn.Linear(d, 2 * d)
         self.Uzr = nn.Linear(m, 2 * d)
         self.Wc = nn.Linear(d, d)
@@ -35,6 +36,15 @@ class MXGRUCell(nn.Module):
     def reset(self):
         self.R.fill_(3.5)
 
+    def diag_gain(self):
+        """R -> diag 门控系数 [0,1]. rup: R 高时直通开; rdn: R 低时直通开."""
+        if self.mode == "always":
+            return torch.ones_like(self.R)
+        g = (self.R - self.r_min) / (self.r_max - self.r_min)   # [0,1]
+        if self.mode == "rdn":
+            g = 1.0 - g
+        return g.clamp(0, 1)
+
     def forward(self, u_seq, h=None):
         b, T, _ = u_seq.shape
         if h is None:
@@ -47,7 +57,8 @@ class MXGRUCell(nn.Module):
             repro = self.scale_r * self.R * h * (1 - h)
             r = torch.sigmoid(r_pre + repro)
             z = torch.sigmoid(z_pre)
-            c = torch.tanh(self.Wc(r * h) + uc[:, t] + self.scale_d * self.diag * h)
+            diag_inj = self.scale_d * self.diag * h * self.diag_gain()
+            c = torch.tanh(self.Wc(r * h) + uc[:, t] + diag_inj)
             h = z * h + (1 - z) * c
             with torch.no_grad():
                 self.R += self.eta * self.R * (self.rho - h.float().mean(0, keepdim=True))
