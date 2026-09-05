@@ -50,25 +50,52 @@ class StackCell(nn.Module):
         return self.c2(h1)
 
 
-class StackRecall(nn.Module):
-    def __init__(self, order, d=128):
+class BridgeStackCell(nn.Module):
+    """瓶颈压缩桥堆叠: c1 -> tanh(Linear(d, bd)) 压缩到 bd 维 -> c2."""
+
+    def __init__(self, kind1, kind2, m, d, bd=8):
         super().__init__()
-        k1, k2 = KIND[order.split("-")[0]], KIND[order.split("-")[1]]
-        self.cell = StackCell(k1, k2, 2, d)
+        self.d = d
+        self.c1 = make_cell(kind1, m, d)
+        self.bridge = nn.Linear(d, bd)
+        self.c2 = make_cell(kind2, bd, d)
+
+    def forward(self, u_seq):
+        h1 = self.c1(u_seq)
+        u2 = torch.tanh(self.bridge(h1))
+        return self.c2(u2)
+
+
+class StackRecall(nn.Module):
+    def __init__(self, order, d=128, bd=8):
+        super().__init__()
+        if order.startswith("b"):
+            k1, k2 = KIND[order.split("-")[1][0]], KIND[order.split("-")[1][1]]
+            # order 形如 b-xm / b-mx
+            self.cell = BridgeStackCell(k1, k2, 2, d, bd)
+        else:
+            k1, k2 = KIND[order.split("-")[0]], KIND[order.split("-")[1]]
+            self.cell = StackCell(k1, k2, 2, d)
         self.head = nn.Linear(d, 1)
 
     def forward(self, x):
         return self.head(self.cell(x)[:, -1]).squeeze(-1)
 
 
-def make_lm(order, vocab, d=256):
-    k1, k2 = KIND[order.split("-")[0]], KIND[order.split("-")[1]]
+def make_lm(order, vocab, d=256, bd=8):
+    if order.startswith("b"):
+        k1, k2 = KIND[order.split("-")[1][0]], KIND[order.split("-")[1][1]]
+    else:
+        k1, k2 = KIND[order.split("-")[0]], KIND[order.split("-")[1]]
 
     class SLM(nn.Module):
         def __init__(self):
             super().__init__()
             self.emb = nn.Embedding(vocab, d)
-            self.cell = StackCell(k1, k2, d, d)
+            if order.startswith("b"):
+                self.cell = BridgeStackCell(k1, k2, d, d, bd)
+            else:
+                self.cell = StackCell(k1, k2, d, d)
             self.head = nn.Linear(d, vocab)
 
         def forward(self, ids):
