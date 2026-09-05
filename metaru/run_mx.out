@@ -1,0 +1,50 @@
+=== ① 流内召回训练 (L=512, 5000 步) ===
+E:\minimax_h3_run\.venv\Lib\site-packages\torch\autograd\graph.py:979: UserWarning: Attempting to run cuBLAS, but there was no current CUDA context! Attempting to set the primary context... (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\aten\src\ATen\cuda\CublasHandlePool.cpp:408.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+E:\minimax_h3_run\.venv\Lib\site-packages\torch\autograd\graph.py:979: UserWarning: The AccumulateGrad node's stream does not match the stream of the node that produced the incoming gradient. This may incur unnecessary synchronization and break CUDA graph capture if the AccumulateGrad node's stream is the default stream. This mismatch is caused by an AccumulateGrad node created prior to the current iteration being kept alive. This can happen if the autograd graph is still being kept alive by tensors such as the loss, or if you are using DDP, which will stash a reference to the node. To resolve the mismatch, delete all references to the autograd graph or ensure that DDP initialization is performed under the same stream as subsequent forwards. If the mismatch is intentional, you can use torch.autograd.graph.set_warn_on_accumulate_grad_stream_mismatch(False) to suppress this warning. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\torch\csrc\autograd\input_buffer.cpp:323.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+  metagru 0 loss=0.07907 (1s)
+  metagru 1000 loss=0.08466 (508s)
+  metagru 2000 loss=0.07829 (1034s)
+  metagru 3000 loss=0.08385 (1577s)
+  metagru 4000 loss=0.09044 (2091s)
+  == metagru 训完 (2599s) ==
+  xgru 0 loss=0.08068 (1s)
+  xgru 1000 loss=0.08466 (494s)
+  xgru 2000 loss=0.07803 (987s)
+  xgru 3000 loss=0.00240 (1479s)
+  xgru 4000 loss=0.00007 (1972s)
+  == xgru 训完 (2465s) ==
+  mxgru 0 loss=0.07764 (1s)
+  mxgru 1000 loss=0.08473 (506s)
+  mxgru 2000 loss=0.07804 (1012s)
+  mxgru 3000 loss=0.00012 (1517s)
+  mxgru 4000 loss=0.00001 (2022s)
+  == mxgru 训完 (2527s) ==
+=== ① 召回外推 (MSE) ===
+  L= 512: metagru=0.0000  xgru=0.0000  mxgru=0.0000
+  L=1024: metagru=0.0000  xgru=0.0192  mxgru=0.0192
+  L=2048: metagru=0.0005  xgru=0.1401  mxgru=0.1523
+  L=4096: metagru=0.0033  xgru=0.4903  mxgru=0.4485
+=== ② LM 训练 (800 步) ===
+  metagru-lm 0 loss=7.9385 (0s)
+  metagru-lm 200 loss=3.0724 (54s)
+  metagru-lm 400 loss=2.5361 (106s)
+  metagru-lm 600 loss=2.2779 (159s)
+  == metagru-lm 训完 (213s) ==
+  xgru-lm 0 loss=7.9314 (0s)
+  xgru-lm 200 loss=3.1103 (53s)
+  xgru-lm 400 loss=2.5095 (107s)
+  xgru-lm 600 loss=2.2249 (160s)
+  == xgru-lm 训完 (212s) ==
+  mxgru-lm 0 loss=7.9314 (0s)
+  mxgru-lm 200 loss=3.0888 (52s)
+  mxgru-lm 400 loss=2.5259 (105s)
+  mxgru-lm 600 loss=2.2594 (159s)
+  == mxgru-lm 训完 (212s) ==
+=== ② LM 评估 + 生成多样性 ===
+  metagru: CE=2.1301 distinct2=0.105 max_run=1
+  xgru: CE=2.0581 distinct2=0.315 max_run=1
+  mxgru: CE=2.1059 distinct2=0.287 max_run=2
+
+完成
