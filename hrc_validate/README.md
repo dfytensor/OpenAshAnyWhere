@@ -143,3 +143,27 @@ Spark-X2.5-1.7B decode 延迟 vs 上下文长度:
 
 HRC 加速需要: 大模型 + 长上下文 + 标准MHA. Spark 这类已优化架构
 不需要 HRC. HRC 的正确定位 = 大模型(7B+) + 长文档(128K+) 的专用加速器.
+
+## Meta-ASH (MetaGRU + ConvASH 融合) 快速验证 2026-09-09
+- 架构: MetaASHLM 16层×640d, br 4分支全宽(640→640) + cummax + gen_model + MetaGRU 门控(r/z) + 繁衍项 + 内稳态R
+- 词表: OpenASHVoc 23005, minimind 800 docs × 256 tok, 3000 steps, lr 3e-4 cosine, BS=8
+- | 模型 | 参数 | final loss |
+|---|---|---|
+| Meta-ASH 完整 (门控+繁衍+内稳态) | 143.3M | **6.29** |
+| 消融 (仅 br+cummax+gen_model) | 141.0M | 6.56 |
+- 结论: MetaGRU 门控带来 **-0.27 nats** (相对提升 ~4%), 与 MetaRU v2 结论一致(门控救活但不超 GRU 基线)
+- 注意: 全宽 br 是为修维度 bug 的简化, 参数量 143M 非 30M; 与 ConvASH30 原版(~2-3 SFT loss)不可直接比
+- 文件: meta_ash_v2.py (完整版, ckpt meta_ash_final.pt 617MB), meta_ash_ablation.py (消融)
+
+## Meta-ASH 30M 公平对比 2026-09-09
+- 参数化对齐: br/gate 均为 ConvLinearT(k=9,w=64), 与 ConvASH30 相同; 两模型均 29.6M
+- 同数据 (minimind 800 docs x 256) 同种子 (42) 同 3000 步 lr 3e-4 cosine BS=8
+- | 模型 | 参数 | final loss |
+|---|---|---|
+| ORIG ConvMaxStateSuper (原版逐行复刻) | 29.6M | 3.657 |
+| META MetaMaxState30 (门控+繁衍+内稳态) | 29.6M | **2.870** |
+- **结论: Meta 机制 -0.79 nats (21.5% 相对提升)**, 远大于 143M 全宽版的 -0.27
+- MetaGRU 门控用 ConvLinearT 参数化 (gate_r/gate_z), 参数等级与原版一致
+- 繁衍项 R*h(1-h) 注入 o1 分支 (x0.1), 内稳态 R buffer 用 .data 更新避免 autograd 版本冲突
+- 文件: meta_ash_30m.py
+- 速查: 143M 全宽版 meta_ash_v2.py (6.29) vs 消融 meta_ash_ablation.py (6.56)
