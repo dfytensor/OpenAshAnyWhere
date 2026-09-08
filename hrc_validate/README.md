@@ -116,3 +116,30 @@ mem_soft 注入后 8 层 -> backward 触发 device-side assert (NaN)。
 与 CTS 共同教训: CTS 和 HRC 都依赖非因果信息流, 需要双向或扩散式
 模型作为底座。因果自回归模型在结构上无法支持这类操作。HRC 的正确定位
 是需要专门双向/扩散底座的独立架构 (如 Seed Diffusion / Mercury 2)。
+
+## Spark-X2.5-1.7B HRC-Split 原型 (hrc_spark_split.py)
+
+架构: Spark 1.7B 28层劈成 encode(layers 0-13 + LoRA-A) / decode(layers 14-27 + LoRA-B)
+em/head 共享, 原参数冻结。可训练 20.3M (LoRA + mem_proj + seg_pool)。
+
+| 模型 | 上下文 | NLL |
+|---|---|---|
+| Spark 原模型 (无微调) | 全 2048 token | 2.283 |
+| HRC-Split (LoRA 微调) | 10 mem + 64 window | 0.075 |
+
+注意: HRC 经过数据微调而基线是零样本, 对比不公平。正确做法需要给基线做同数据 SFT。
+
+## 推理速度 (bench_decode.py)
+
+Spark-X2.5-1.7B decode 延迟 vs 上下文长度:
+
+| ctx | ms/tok | tok/s | vs 2048 |
+|---|---|---|---|
+| 64 | 39.9 | 25.1 | 1.13x |
+| 2048 | 45.2 | 22.1 | 1.00x |
+
+仅 13% 差异. 原因: Spark-X2.5 已内置 GQA(2KV heads) + 21/28层滑窗(512)
++ 1.7B权重主导带宽. KV 不是瓶颈.
+
+HRC 加速需要: 大模型 + 长上下文 + 标准MHA. Spark 这类已优化架构
+不需要 HRC. HRC 的正确定位 = 大模型(7B+) + 长文档(128K+) 的专用加速器.
