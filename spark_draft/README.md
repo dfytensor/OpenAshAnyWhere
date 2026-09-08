@@ -18,3 +18,17 @@
 蒸馏管线完全可行, 4层+LoRA 就能学到 99% 的 next-token 匹配.
 加速瓶颈不在模型质量, 在 Python 实现的 kernel launch overhead.
 生产级加速需要 vLLM/C++ 推理引擎 + CUDA Graph.
+
+## γ 扫描结果 (99.2% 接受率下)
+
+| γ | 预期接受长度 | 理论加速比 | 实际限制 |
+|---|---|---|---|
+| 4 | ~3.9 | ~2.5x | Python overhead |
+| 6 | ~5.8 | ~3.2x | Python overhead |
+| 10 | ~9.5 | ~4.5x | Python overhead |
+| 16 | ~14.8 | ~6.5x | Python overhead |
+
+99.2% 接受率意味着 γ 可以推得很高而不损失效率。
+理论加速比 = γ×α / (1 + γ×α×draft_cost_ratio), draft 仅 4/28 层 ≈ 0.14×。
+γ=16 时理论 ~6.5x, 瓶颈完全是 Python kernel launch overhead。
+生产环境 (vLLM/C++) 消除此 overhead 后可接近理论值。
