@@ -167,3 +167,18 @@ HRC 加速需要: 大模型 + 长上下文 + 标准MHA. Spark 这类已优化架
 - 繁衍项 R*h(1-h) 注入 o1 分支 (x0.1), 内稳态 R buffer 用 .data 更新避免 autograd 版本冲突
 - 文件: meta_ash_30m.py
 - 速查: 143M 全宽版 meta_ash_v2.py (6.29) vs 消融 meta_ash_ablation.py (6.56)
+
+## Meta-ASH 30M 全量训练: 快验增益不可迁移 (负结果, 重要) 2026-09-16
+- 配置: 全量 minimind (PT 1.27M 样本 39,697 步 + SFT 28,304 步), 同 ORIG 管线 (lr 1e-3/2e-4 常数), 17h
+- 终评 (同 120 批 SFT 评测集): **ORIG ConvASH30 NLL 3.031 vs META MetaASH30 3.627** — META 落后 0.60 nats
+- **与快验 (META 2.870 vs ORIG 3.657, -0.79) 完全反转**
+- 失效诊断: R 内稳态 buffer 极化 — 16 层 R 全部跑到钳位值 (4.0 或 0.1, 无中间态);
+  R=4.0 层繁衍项 R*h(1-h)*0.1 成为恒定噪声注入, R=0.1 层直接死亡;
+  门控本身未饱和 (zg 0.21-0.73), gate_r/gate_z 不是问题
+- 教训链: 与 MetaRU v2 '内稳态必须关' 结论一致; 快验 3000 步时 R 尚未漂移完成,
+  扮演正则角色; 68k 步后极化成毒 — **短程 A/B 增益不能外推到长程训练**
+- 混杂因素 (诚实记录): 全量管线 lr 1e-3 常数 (ORIG 配方) vs 快验 lr 3e-4 cosine,
+  META 的最优超参可能不同; 未做超参重扫即判负, 但 R 极化是结构性问题, 非超参可完全解释
+- 生成质量: META 样本 <|unk|> 串与复读更多, 与 NLL 一致
+- 文件: train_meta_ash30.py, eval_meta_vs_orig.py, bench_meta_full.py
+- 修复候选 (未跑): 关内稳态 / eta 降 3 个量级 / R 用慢 EMA; 建议先 8k 步中程验证再上全量
