@@ -182,3 +182,12 @@ HRC 加速需要: 大模型 + 长上下文 + 标准MHA. Spark 这类已优化架
 - 生成质量: META 样本 <|unk|> 串与复读更多, 与 NLL 一致
 - 文件: train_meta_ash30.py, eval_meta_vs_orig.py, bench_meta_full.py
 - 修复候选 (未跑): 关内稳态 / eta 降 3 个量级 / R 用慢 EMA; 建议先 8k 步中程验证再上全量
+
+## Meta-ASH 30M 损伤定位: SFT 阶段不收敛, PT 阶段不输 (2026-09-16 中程三臂)
+- 8k 步 x 3 臂 (全量管线条件 lr 1e-3, midcheck.py): orig 3.999 / **gates-only 4.310** / **asis 3.924**
+- **gates-only 反而更差** -> 快验 A/B 的增益来自 R*繁衍项的正则效应, 不是门控本身
+- asis 的 R 轨迹: 500 步内即极化到 4.0 并全程钉死 — 但 8k 步仍领先 orig
+- 全量日志复核: META PT 终点 ~3.62-3.78 vs ORIG ~3.86 (不输); **SFT 轨迹 3.6-4.2 游走不收敛** vs ORIG 降到 3.03
+- **修正诊断**: R 极化在 PT 是良性正则; 低 lr (2e-4) SFT 下 R=4.0 层的恒定噪声注入阻止精细收敛
+- 决定性测试 (待跑): pt_full 出发 6k 步 mini-SFT, repro 关闭 vs 已有 repro-on 轨迹 (6k~3.90)
+- 战略账: 即使修复, 全量 PT 优势已蒸发 (打平非 -21%), 最好结局是 SFT 追平
