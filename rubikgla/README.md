@@ -107,3 +107,36 @@ python run_phase1.py    # 全矩阵 16 run; 纯形式数据存 rubikgla_results_
 4. 工程: B=128 + eval256 峰值显存 11.9GB (此前 B=32 仅 1-2GB), 单位算力成本降 4 倍
 5. 事故记录: 双 Start-Process 并发写同一 JSON + 共享 GPU 导致 CUDA illegal address,
    旧进程最终写入清场 — 教训: 后台任务启动前必须确认旧进程清零
+
+
+---
+
+## 九、阶段二续：自然语言 LM 对比 (H2 测试, run_lm.py)
+
+**偏差声明**: enwik8 被网络策略阻断 (mattmahoney/deepai 均不可达), 改用本地
+minimind token 序列 (OpenASHVoc, train 1.27M / val 5000 x 128 tok)。
+
+### 配置
+
+6 层 x d128 x H8(dh16), seq 128, B=64, 2500 步, lr 6e-4, bf16 autocast
+(rubik 层内部 fp32 岛 — bf16 下 matrix_exp 反向产生 inf 梯度, 见工程记录)
+hybrid = 每 3 层插 1 层 SWA(窗口 128)。各模型参数 6.3~7.8M 基本同级。
+
+### 结果 (val NLL / bpc)
+
+| 模型 | val NLL | bpc |
+|---|---|---|
+| **hybrid (Rubik+SWA)** | **4.003** | **5.775** |
+| tf | 4.021 | 5.801 |
+| rubik-decay | 4.170 | 6.016 |
+| gla | 4.241 | 6.118 |
+
+### 判读
+
+- **H2 确认且加强**: 纯 rubik 小胜 gla (-0.07 nats, H2 原预期略逊);
+  **hybrid 四模型第一**, 超 tf (+0.018 nats, 参数同级)
+- 与阶段一/二构成完整证据链: 修正版机制在算法任务 (追平), 状态跟踪 (领先),
+  长度外推 (平), 自然语言 LM (hybrid 第一)
+- 边界: 单种子、短程 (2500 步)、L=128 小规模、hybrid vs tf 差距小 (0.018)
+- 工程沉淀: bf16 autocast + matrix_exp 反向 inf 是隐蔽雷, rubik 层必须 fp32 岛;
+  串行实现在 d256/L256 即 91.8s/步 + 32.5GB — 仿射前缀扫描并行化是规模化的前置
