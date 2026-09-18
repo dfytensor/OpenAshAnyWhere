@@ -121,6 +121,44 @@ class RubikLowRankFast(nn.Module):
         return out, state
 
 
+from scan import rubik_scan_forward
+
+
+class RubikScanLayer(nn.Module):
+    """前缀扫描版 Rubik 层: 递归段用 log(L) 趟仿射扫描, L 越长收益越大."""
+    def __init__(self, d, H=4, decay=True):
+        super().__init__()
+        self.H, self.dh = H, d // H
+        self.decay = decay
+        self.ln_in = nn.LayerNorm(d)
+        self.q = nn.Linear(d, d)
+        self.k = nn.Linear(d, d)
+        self.v = nn.Linear(d, d)
+        self.skew = nn.Linear(d, H * self.dh * self.dh)
+        nn.init.normal_(self.skew.weight, 0.0, 0.01)
+        nn.init.zeros_(self.skew.bias)
+        if decay:
+            self.lam = nn.Parameter(torch.full((H, self.dh, 1), -1.0))
+
+    def forward(self, x, state=None):
+        B, L, _ = x.shape
+        H, dh = self.H, self.dh
+        with torch.autocast("cuda", enabled=False):
+            x = self.ln_in(x).float()
+            q = self.q(x).float().view(B, L, H, dh)
+            k = self.k(x).float().view(B, L, H, dh)
+            v = self.v(x).view(B, L, H, dh)
+            M = self.skew(x).float().view(B, L, H, dh, dh)
+            G = torch.matrix_exp(M - M.transpose(-1, -2))
+            lam = torch.sigmoid(self.lam).unsqueeze(0).float() if self.decay else None
+            W = k.unsqueeze(-1) * v.unsqueeze(-2)                     # k_t v_t^T 外积 (B,L,H,dh,dh)
+            o = rubik_scan_forward(G, lam, W, q)                       # (B,L,H,dh)
+            out = o.reshape(B, L, H * dh)
+            if torch.is_autocast_enabled():
+                out = out.to(torch.bfloat16)
+        return out, None
+
+
 def lowrank_ref_check(B=2, H=2, dh=16, r=2, seed=0):
     """正确性: 低秩 G·S vs 全秩 matrix_exp(skew(uv^T-vu^T))·S."""
     torch.manual_seed(seed)

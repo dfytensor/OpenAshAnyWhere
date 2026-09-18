@@ -193,3 +193,33 @@ reverse: rubiklr 1450 -> rubiklrf 运行中 (rubik 全秩 937, gla 238)。
 (O(4r dh^2) < O(dh^3) 的 FLOPs 约减首次兑现为墙钟)。
 GLA 仍快 3x (逐元素无 matmul, 结构性优势)。
 bracket 速度数据补充中 (该任务 3-6s/步, 病态慢)。
+
+
+---
+
+## 十二、仿射前缀扫描 (scan.py / RubikScanLayer / scan_ab.py)
+
+数学: S_t = A_t S_{t-1} + B_t, A_t = diag(lam) G_t (谱范数<=1, 乘积有界);
+仿射复合可结合 => Hillis-Steele log(L) 趟全批量扫描。正确性: scan vs loop 1.19e-06。
+
+### 加速曲线 (孤立基准, fwd+bwd)
+
+| 配置 | loop | scan | 加速 |
+|---|---|---|---|
+| B=64 L=128 dh=32 | 7761 | 5263 | 1.47x |
+| B=64 L=256 dh=32 | 44081 | 15780 | 2.79x |
+| B=64 L=512 dh=32 | 138445 | 55399 | 2.50x |
+| B=128 L=512 dh=16 | 29065 | 7879 | 3.69x |
+
+加速比随 L 增长 — 长上下文正是扫描的主场。
+
+### 实战
+
+- 层级等价: scan vs loop 输出 1.91e-06 (同权重同输入)
+- 争用环境交替测量 (3 轮中位): loop 563 vs scan 342 ms = **1.65x @ L=256**
+  — 对外部争用鲁棒 (scan 的 launch 次数少, 排队损耗低)
+- scan 臂实战训练: fsm n=256 (L=256) 1000 步 acc 0.9662, 精度正常
+- loop 臂训练墙钟因第三方 GPU 打满 (24GB/25 进程, 争用系数 ~64x) 不可测,
+  后台进程保留, 结果自动落盘 scan_ab_results.json
+- 事故记录: 写入张量 unsqueeze(-2)*transpose 造出内积标量而非外积 — 外积
+  必须 k.unsqueeze(-1) * v.unsqueeze(-2)
