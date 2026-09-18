@@ -140,3 +140,31 @@ hybrid = 每 3 层插 1 层 SWA(窗口 128)。各模型参数 6.3~7.8M 基本同
 - 边界: 单种子、短程 (2500 步)、L=128 小规模、hybrid vs tf 差距小 (0.018)
 - 工程沉淀: bf16 autocast + matrix_exp 反向 inf 是隐蔽雷, rubik 层必须 fp32 岛;
   串行实现在 d256/L256 即 91.8s/步 + 32.5GB — 仿射前缀扫描并行化是规模化的前置
+
+
+---
+
+## 十、H4 低秩消融 (lowrank.py / run_lowrank.py)
+
+数学: A = uv^T - vu^T = P Q^T (P=[u,-v], Q=[v,u], 内维 2r);
+G S = S + P g(Q^T P) (Q^T S), g(X) = sum X^m/(m+1)! (12 项 Taylor)。
+恒等式 vs matrix_exp 全秩参考: 误差 1.67e-06, G 正交性保持 (lowrank.py 自检 PASS)。
+
+### 结果 (B=128, seed 1, 2000 步)
+
+| run | best acc | ms/step |
+|---|---|---|
+| fsm \| rubik 全秩 | 0.986 | 544 |
+| fsm \| **rubiklr r=2** | **0.980** | **919 (更慢 1.7x)** |
+| fsm \| gla | 0.908 | 158 |
+| reverse \| rubik / rubiklr / gla | 1.0/1.0/1.0 | 937 / 1450 / 238 |
+
+### 判决: 精度半场成立, 速度半场被实现税吃掉
+
+1. **精度无损**: r=2 与全秩差距 0.007 (fsm), reverse/bracket 无差 — H4 精度主张成立
+2. **速度未兑现**: naive 实现把 12 项 Taylor 放在逐步循环内, 每 token 12 次小
+   kernel launch — Python/launch 开销吞掉 O(dh^3)->O(4r dh^2) 的 FLOPs 约减
+3. **修复路径明确**: G_x 对全部 t 一次性批量预计算 (与全秩 matrix_exp 同构),
+   循环内只留 2 次批量 matmul — 预计追平或反超全秩
+4. GLA 仍快 3-6x: 逐元素无 matmul 是结构性速度优势, 非低秩可及
+5. 事故记录: make() 忘 decay=True 跑出一版纯形式参照 (0.579) — 已作废重跑
