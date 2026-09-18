@@ -168,3 +168,28 @@ G S = S + P g(Q^T P) (Q^T S), g(X) = sum X^m/(m+1)! (12 项 Taylor)。
    循环内只留 2 次批量 matmul — 预计追平或反超全秩
 4. GLA 仍快 3-6x: 逐元素无 matmul 是结构性速度优势, 非低秩可及
 5. 事故记录: make() 忘 decay=True 跑出一版纯形式参照 (0.579) — 已作废重跑
+
+
+---
+
+## 十一、H4 终版: 批量 Gx 预计算修复 (RubikLowRankFast, lowrank.py)
+
+修复: Taylor 序列从逐步循环移出, 对全部 t 一次性批量计算 (B,L,H,2r,2r);
+循环内只剩 Q^T S 与 P z 两次小 matmul。与慢版输出逐位一致 (7.15e-07)。
+
+### 结果 (fsm, B=128, seed 1)
+
+| 变体 | best acc | ms/step |
+|---|---|---|
+| rubik 全秩 (matrix_exp) | 0.986 | 544 |
+| rubiklr 逐token Taylor | 0.980 | 919 |
+| **rubiklrf 批量 Gx** | **0.981** | **499 (反超全秩)** |
+
+reverse: rubiklr 1450 -> rubiklrf 运行中 (rubik 全秩 937, gla 238)。
+
+### H4 终判决
+
+**成立 (前提: 批量实现)**。r=2 精度与全秩差 0.005, 速度反超全秩
+(O(4r dh^2) < O(dh^3) 的 FLOPs 约减首次兑现为墙钟)。
+GLA 仍快 3x (逐元素无 matmul, 结构性优势)。
+bracket 速度数据补充中 (该任务 3-6s/步, 病态慢)。

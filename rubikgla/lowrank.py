@@ -62,6 +62,65 @@ class RubikLowRankLayer(nn.Module):
         return out, state
 
 
+class RubikLowRankFast(nn.Module):
+    """批量 Gx 预计算版: Taylor 序列对全部 t 一次性算好 (B,L,H,2r,2r),
+    循环内只剩 2 次小 matmul — 消除逐 token launch 税."""
+    def __init__(self, d, H=4, r=2, decay=True):
+        super().__init__()
+        self.H, self.dh, self.r = H, d // H, r
+        self.decay = decay
+        self.ln_in = nn.LayerNorm(d)
+        self.q = nn.Linear(d, d)
+        self.k = nn.Linear(d, d)
+        self.v = nn.Linear(d, d)
+        self.uv = nn.Linear(d, H * 2 * r * self.dh)
+        nn.init.normal_(self.uv.weight, 0.0, 0.01)
+        nn.init.zeros_(self.uv.bias)
+        if decay:
+            self.lam = nn.Parameter(torch.full((H, self.dh, 1), -1.0))
+
+    def forward(self, x, state=None):
+        B, L, _ = x.shape
+        H, dh, r = self.H, self.dh, self.r
+        with torch.autocast("cuda", enabled=False):
+            x = self.ln_in(x).float()
+            q = self.q(x).view(B, L, H, dh)
+            k = self.k(x).view(B, L, H, dh)
+            v = self.v(x).view(B, L, H, dh)
+            uv = self.uv(x).view(B, L, H, 2 * r, dh)
+            u = uv[:, :, :, :r, :]
+            w = uv[:, :, :, r:, :]
+            P = torch.cat([u, -w], dim=-2).transpose(-2, -1)    # (B,L,H,dh,2r)
+            Q = torch.cat([w, u], dim=-2).transpose(-2, -1)
+            # 批量 Taylor: X (B,L,H,2r,2r), Gx = sum X^m/(m+1)!
+            X = torch.einsum("nlhpi,nlhpj->nlhij", Q, P)
+            Gx = torch.eye(2 * r, device=x.device).view(1, 1, 1, 2 * r, 2 * r)
+            term = Gx
+            for m in range(1, 13):
+                term = term @ X / (m + 1)
+                Gx = Gx + term
+            if state is None:
+                state = x.new_zeros(B, H, dh, dh)
+            else:
+                state = state.float()
+            lam = torch.sigmoid(self.lam).unsqueeze(0).float() if self.decay else None
+            outs = []
+            for t in range(L):
+                write = k[:, t].view(B, H, dh, 1) * v[:, t].view(B, H, 1, dh)
+                z = torch.einsum("nhpa,nhpc->nhac", Q[:, t], state)
+                z = Gx[:, t] @ z
+                state = state + P[:, t] @ z
+                if self.decay:
+                    state = lam * state
+                state = state + write
+                o = (q[:, t].view(B, H, 1, dh) @ state).squeeze(-2)
+                outs.append(o.reshape(B, H * dh))
+            out = torch.stack(outs, 1)
+            if torch.is_autocast_enabled():
+                out = out.to(torch.bfloat16)
+        return out, state
+
+
 def lowrank_ref_check(B=2, H=2, dh=16, r=2, seed=0):
     """正确性: 低秩 G·S vs 全秩 matrix_exp(skew(uv^T-vu^T))·S."""
     torch.manual_seed(seed)

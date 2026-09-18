@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from models import LM, RubikLayer, GLALayer
-from lowrank import RubikLowRankLayer
+from lowrank import RubikLowRankLayer, RubikLowRankFast
 import tasks
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -32,6 +32,8 @@ def make(task, kind):
     if m is None:
         if kind == "rubik":
             cls = lambda d, H: RubikLayer(d, H, decay=True)
+        elif kind == "rubiklrf":
+            cls = lambda d, H: RubikLowRankFast(d, H, r=2, decay=True)
         else:
             cls = lambda d, H: RubikLowRankLayer(d, H, r=2, decay=True)
         class LM2(nn.Module):
@@ -97,7 +99,7 @@ def main():
         with open(RES, encoding="utf-8") as f:
             data = json.load(f)
     for task in ("fsm", "reverse", "bracket"):
-        for kind in ("rubik", "rubiklr", "gla"):
+        for kind in ("rubik", "rubiklr", "rubiklrf", "gla"):
             key = f"{task}|{kind}"
             if key in data:
                 continue
