@@ -75,6 +75,14 @@ class LM(nn.Module):
             self.stack = nn.ModuleList([
                 SWALayer(d, H) if k == "swa" else RubikLayer(d, H, decay=True)
                 for k in self.kinds])
+        elif kind.startswith("rubikN"):
+            # 反参数化: rubikN 每 N 层放 1 层 rubik, 其余 SWA (测高 SWA 配比)
+            period = int(kind.replace("rubikN", "") or 3)
+            self.kinds = ["rubik" if (i + 1) % period == 0 else "swa"
+                          for i in range(layers)]
+            self.stack = nn.ModuleList([
+                SWALayer(d, H) if k == "swa" else RubikLayer(d, H, decay=True)
+                for k in self.kinds])
         elif kind == "tf":
             layer = nn.TransformerEncoderLayer(d, nhead=H, dim_feedforward=4 * d,
                                                batch_first=True, norm_first=True)
@@ -92,7 +100,7 @@ class LM(nn.Module):
             mask = torch.triu(torch.ones(ids.shape[1], ids.shape[1],
                                          device=ids.device, dtype=torch.bool), 1)
             x = self.tf(x, mask=mask)
-        elif self.kind.startswith("hybrid"):
+        elif self.kind.startswith("hybrid") or self.kind.startswith("rubikN"):
             state = None
             for i, layer in enumerate(self.stack):
                 if self.kinds[i] == "swa":
@@ -143,7 +151,7 @@ def main():
         with open(RES, encoding="utf-8") as f:
             data = json.load(f)
 
-    for kind in ("hybrid2", "hybrid6"):
+    for kind in ("rubikN3", "rubikN6"):
         if kind in data:
             continue
         torch.manual_seed(0)
