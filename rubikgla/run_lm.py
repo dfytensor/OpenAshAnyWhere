@@ -68,8 +68,10 @@ class LM(nn.Module):
             self.stack = nn.ModuleList([RubikLayer(d, H, decay=True) for _ in range(layers)])
         elif kind == "gla":
             self.stack = nn.ModuleList([GLALayer(d, H) for _ in range(layers)])
-        elif kind == "hybrid":
-            self.kinds = ["swa" if i % 3 == 2 else "rubik" for i in range(layers)]
+        elif kind.startswith("hybrid"):
+            period = int(kind.replace("hybrid", "") or 3)
+            self.kinds = ["swa" if (i + 1) % period == 0 else "rubik"
+                          for i in range(layers)]
             self.stack = nn.ModuleList([
                 SWALayer(d, H) if k == "swa" else RubikLayer(d, H, decay=True)
                 for k in self.kinds])
@@ -90,7 +92,7 @@ class LM(nn.Module):
             mask = torch.triu(torch.ones(ids.shape[1], ids.shape[1],
                                          device=ids.device, dtype=torch.bool), 1)
             x = self.tf(x, mask=mask)
-        elif self.kind == "hybrid":
+        elif self.kind.startswith("hybrid"):
             state = None
             for i, layer in enumerate(self.stack):
                 if self.kinds[i] == "swa":
@@ -141,7 +143,7 @@ def main():
         with open(RES, encoding="utf-8") as f:
             data = json.load(f)
 
-    for kind in ("rubik", "gla", "hybrid", "tf"):
+    for kind in ("hybrid2", "hybrid6"):
         if kind in data:
             continue
         torch.manual_seed(0)
