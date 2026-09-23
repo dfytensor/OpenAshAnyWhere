@@ -275,3 +275,34 @@ bracket 速度数据补充中 (该任务 3-6s/步, 病态慢)。
 右端非单调 (5/6=4.072 差于 6/6=4.021) — 排除简单插值解释,
 两种层存在配比共振。对用户问题 (hybrid2 是否最优) 的回答: **是, 已在全
 采样意义下确认** (单种子/短程/小规模边界不变)。
+
+
+---
+
+## 十五、CED 简化复现: DeepSeek-V4.1-Flash 框架 x 我们的组件 (run_ced.py)
+
+背景: DeepSeek-V4.1-Flash (arXiv:2609.19969) 的 CED = 编码器末层隐状态 H_{L/2}
+直接投影出解码器全局 KV (C_l = H_{L/2} W_l^KV), 解码器局部 SWA 逐层 (YOCO 血统)。
+我们的简化版 (无 MoE): 3 层编码器处理前缀 96 token -> H_3 -> 解码器每层 KV = H_3 W_l
+跨注意力 + 局部 SWA(32), 生成后缀 32 token (prefix-LM 目标, minimind)。
+
+### 四模型对比 (2500 步, B=64, suffix NLL)
+
+| 模型 | val NLL | 参数 |
+|---|---|---|
+| flat_hybrid2 (对照) | **3.513** | 8.36M |
+| **ced_hybrid2** | **3.590** | 7.53M |
+| **ced_rubik** | **3.610** | 8.05M |
+| flat_rubik (对照) | 3.667 | 9.38M |
+
+### 判决
+
+1. **两模型对决: CED-Hybrid2 > CED-Rubik** (3.590 vs 3.610) — 用户指定的
+   两个 CED 变体中, 混合编码器胜
+2. **意外发现: CED 结构拯救纯 rubik** — flat_rubik 3.667 -> ced_rubik 3.610
+   (+0.057): 编码器压缩 + 解码器跨注意力到投影 KV, 比让 rubik 状态独自扛
+   全序列更好。混合版无此效应 (flat 3.513 已优于 ced 3.590, CED 拆分反而 -0.077)
+3. **规模经济学 vs 玩具质量**: toy 尺度上 flat 仍最优 (压缩有代价);
+   DeepSeek 的 CED 赢的是 prefill 减半 + KV 1/4 的服务经济学 — 同形权衡
+4. 对 SPEC/工业的启示: 我们的 Rubik-GLA 层作为 CED 编码器组件有效
+   (ced_rubik < flat_rubik 反直觉正向), hybrid2 配比结论在 CED 框架内方向一致
