@@ -39,17 +39,16 @@ class RubikLowRankLayer(nn.Module):
                 state = state.float()
             lam = torch.sigmoid(self.lam).unsqueeze(0).float() if self.decay else None
             outs = []
+            eye2r = torch.eye(2 * r, device=x.device).view(1, 1, 2 * r, 2 * r)
             for t in range(L):
                 Pt, Qt = P[:, t], Q[:, t]
                 X = torch.einsum("nhpi,nhpj->nhij", Qt, Pt)     # (B,H,2r,2r)
-                Gx = torch.eye(2 * r, device=x.device).view(1, 1, 2 * r, 2 * r).expand(B, H, -1, -1)
-                term = Gx.clone()
-                for m in range(1, 13):
-                    term = term @ X / (m + 1)
-                    Gx = Gx + term
+                # g(X) = X^{-1}(e^X - I), 4x4 精确 matrix_exp + 正则 solve (任意范数稳定)
+                E = torch.matrix_exp(X)
+                gX = torch.linalg.solve(X + 1e-4 * eye2r, E - eye2r)
                 write = k[:, t].view(B, H, dh, 1) * v[:, t].view(B, H, 1, dh)
                 z = torch.einsum("nhpi,nhpc->nhic", Qt, state)  # Q^T S -> (B,H,2r,dh)
-                z = Gx @ z
+                z = gX @ z
                 state = state + P[:, t] @ z                     # S + P g(X) Q^T S
                 if self.decay:
                     state = lam * state
@@ -92,13 +91,11 @@ class RubikLowRankFast(nn.Module):
             w = uv[:, :, :, r:, :]
             P = torch.cat([u, -w], dim=-2).transpose(-2, -1)    # (B,L,H,dh,2r)
             Q = torch.cat([w, u], dim=-2).transpose(-2, -1)
-            # 批量 Taylor: X (B,L,H,2r,2r), Gx = sum X^m/(m+1)!
+            # g(X) = X^{-1}(e^X - I), X (B,L,H,2r,2r) — 4x4 精确 matrix_exp + 正则 solve
             X = torch.einsum("nlhpi,nlhpj->nlhij", Q, P)
-            Gx = torch.eye(2 * r, device=x.device).view(1, 1, 1, 2 * r, 2 * r)
-            term = Gx
-            for m in range(1, 13):
-                term = term @ X / (m + 1)
-                Gx = Gx + term
+            eye = torch.eye(2 * r, device=x.device).view(1, 1, 1, 2 * r, 2 * r)
+            E = torch.matrix_exp(X)
+            gX = torch.linalg.solve(X + 1e-4 * eye, E - eye)
             if state is None:
                 state = x.new_zeros(B, H, dh, dh)
             else:
@@ -108,7 +105,7 @@ class RubikLowRankFast(nn.Module):
             for t in range(L):
                 write = k[:, t].view(B, H, dh, 1) * v[:, t].view(B, H, 1, dh)
                 z = torch.einsum("nhpa,nhpc->nhac", Q[:, t], state)
-                z = Gx[:, t] @ z
+                z = gX[:, t] @ z
                 state = state + P[:, t] @ z
                 if self.decay:
                     state = lam * state
@@ -169,11 +166,9 @@ def lowrank_ref_check(B=2, H=2, dh=16, r=2, seed=0):
     S = torch.randn(B, H, dh, dh)
     # 低秩
     X = torch.einsum("bhpi,bhpj->bhij", Q, P)
-    Gx = torch.eye(2 * r).expand(B, H, -1, -1)
-    term = Gx.clone()
-    for m in range(1, 13):
-        term = term @ X / (m + 1)
-        Gx = Gx + term
+    eye = torch.eye(2 * r)
+    E = torch.matrix_exp(X)
+    Gx = torch.linalg.solve(X + 1e-4 * eye, E - eye)
     z = torch.einsum("nhpa,nhpc->nhac", Q, S)
     low = S + P @ (Gx @ z)
     # 全秩参考

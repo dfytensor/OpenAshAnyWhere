@@ -306,3 +306,32 @@ bracket 速度数据补充中 (该任务 3-6s/步, 病态慢)。
    DeepSeek 的 CED 赢的是 prefill 减半 + KV 1/4 的服务经济学 — 同形权衡
 4. 对 SPEC/工业的启示: 我们的 Rubik-GLA 层作为 CED 编码器组件有效
    (ced_rubik < flat_rubik 反直觉正向), hybrid2 配比结论在 CED 框架内方向一致
+
+
+---
+
+## 十六、CED + 低秩 (cedlr): 精度打平, 显存 3.4x (ced_results.json 终表)
+
+ RubikLowRankFast 修复后 (g(X) = solve(X+1e-4I, e^X - I) 于 4x4, 替代 12 项 Taylor —
+后者在 ||X||>2 时截断发散, 即 cedlr 首跑 NaN 的根因), CED 两模型换低秩重跑:
+
+| 模型 | val NLL | 显存 | wall |
+|---|---|---|---|
+| flat_hybrid2 | 3.513 | 9.4GB | 3139s |
+| **cedlr_hybrid2** | **3.585** | **1.7GB** | 690s |
+| ced_hybrid2 (全秩) | 3.590 | 5.7GB | 742s |
+| **cedlr_rubik** | **3.607** | **1.7GB** | 1441s |
+| ced_rubik (全秩) | 3.610 | 5.7GB | 1101s |
+| flat_rubik | 3.667 | 9.4GB | 4424s |
+
+### 判决
+
+1. **精度**: 低秩 vs 全秩差 <=0.005 nats (cedlr_hybrid2 甚至略优) — 打平
+2. **显存**: 1.7GB vs 5.7GB = **3.4x** (结构性: 无大 G 张量、状态投影 KV 小)
+3. **墙钟**: 混合版低秩快 7% (276 vs 297ms/步); rubik 版慢 31% (577 vs 440)
+   — 争用未受控混杂, 方向为平; 逐 token 小算子开销仍是低秩的实现税
+4. **Taylor 教训**: 截断级数在 ||X||>2 发散 — 低秩恒等式的 g(X) 必须
+   用 4x4 精确 matrix_exp + 正则 solve (成本可忽略), 不能用截断级数
+5. 终局: **cedlr_hybrid2 = CED 框架 + 50/50 配比 + 低秩门控** 是当前
+   Rubik-GLA 家族的最优部署形态: 精度 3.585, 显存 1.7GB, CED 结构
+   (prefill 减半 + 全局 KV 投影), 无 MoE

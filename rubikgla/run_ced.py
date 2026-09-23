@@ -9,6 +9,7 @@ import torch.nn.functional as F
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from models import RubikLayer
+from lowrank import RubikLowRankLayer, RubikLowRankFast
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RES = os.path.join(HERE, "ced_results.json")
@@ -64,11 +65,13 @@ class CrossAttn(nn.Module):
 class CEDModel(nn.Module):
     """CED: 编码器 3 层处理前缀 -> H3; 解码器每层 KV = H3 @ W_l^KV, 局部 SWA.
     variant: 'rubik' (纯) / 'hybrid2' ([rubik,rubik,swa] x2)."""
-    def __init__(self, variant, V=V, d=D):
+    def __init__(self, variant, V=V, d=D, lowrank=False):
         super().__init__()
         self.variant = variant
+        rubik_cls = (lambda dd, hh: RubikLowRankFast(dd, hh, r=2, decay=True)) if lowrank \
+            else (lambda dd, hh: RubikLayer(dd, hh, decay=True))
         self.emb = nn.Embedding(V, d)
-        self.enc = nn.ModuleList([RubikLayer(d, H, decay=True) for _ in range(L)])
+        self.enc = nn.ModuleList([rubik_cls(d, H) for _ in range(L)])
         if variant == "hybrid2":
             self.enc[2] = SWA32(d, H, win=48)   # 编码器第 3 层换 SWA
         self.dec_kv = nn.ModuleList([nn.Linear(d, 2 * d) for _ in range(L)])   # C_l, Z_l
@@ -83,7 +86,7 @@ class CEDModel(nn.Module):
         h = self.emb(x)
         H3 = h[:, :P]
         for layer in self.enc:
-            if isinstance(layer, RubikLayer):
+            if isinstance(layer, (RubikLayer, RubikLowRankLayer, RubikLowRankFast)):
                 H3, _ = layer(H3)
             else:
                 H3 = layer(H3)
@@ -143,8 +146,9 @@ def evaluate(m, name, val, seed=777, nb=30):
     tot, tok = 0.0, 0
     for i in range(nb):
         x, y, mk = get_batch(val, seed + i)
-        with torch.autocast("cuda", dtype=torch.bfloat16):
+        with torch.no_grad():
             logits = m(x)
+        logits = logits.float()
         if name.startswith("ced"):
             ys = x[:, P + 1:P + Q]
             l = F.cross_entropy(logits[:, :-1].reshape(-1, V), ys.reshape(-1), reduction="sum")
@@ -171,7 +175,9 @@ def main():
     runs = [("ced_rubik", lambda V: CEDModel("rubik", V)),
             ("ced_hybrid2", lambda V: CEDModel("hybrid2", V)),
             ("flat_rubik", lambda V: FlatModel("rubik", V)),
-            ("flat_hybrid2", lambda V: FlatModel("hybrid2", V))]
+            ("flat_hybrid2", lambda V: FlatModel("hybrid2", V)),
+            ("cedlr_rubik", lambda V: CEDModel("rubik", V, lowrank=True)),
+            ("cedlr_hybrid2", lambda V: CEDModel("hybrid2", V, lowrank=True))]
     for name, ctor in runs:
         if name in data:
             continue
@@ -185,12 +191,17 @@ def main():
             x, y, mk = get_batch(train, 60_000 + st)
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 logits = m(x)
+            logits = logits.float()
             if name.startswith("ced"):
                 ys = x[:, P + 1:P + Q]
                 loss = F.cross_entropy(logits[:, :-1].reshape(-1, V), ys.reshape(-1))
             else:
                 loss = (F.cross_entropy(logits.reshape(-1, V), y.reshape(-1),
                                         reduction="none") * mk.reshape(-1)).sum() / mk.sum()
+            if not torch.isfinite(loss):
+                opt.zero_grad(set_to_none=True)
+                print("  %s st%d non-finite loss, skipped" % (name, st), flush=True)
+                continue
             opt.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(m.parameters(), 1.0)
@@ -201,7 +212,8 @@ def main():
                 print("  %s %4d loss=%.4f val=%.4f mem=%.1fGB (%.0fs)" %
                       (name, st + 1, loss.item(), vl, mem, time.time() - t0), flush=True)
         v = evaluate(m, name, val)
-        data[name] = dict(val_nll=round(v, 4), wall_s=round(time.time() - t0))
+        data[name] = dict(val_nll=round(float(v), 4), wall_s=round(time.time() - t0),
+                          ms_per_step=round((time.time() - t0) / STEPS * 1000, 1))
         with open(RES, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=1)
         print("%s FINAL val=%.4f" % (name, v), flush=True)
