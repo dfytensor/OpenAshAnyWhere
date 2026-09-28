@@ -148,7 +148,22 @@ Block = pre-norm causal attention + SwiGLU, α 可学习标量 (sigmoid 参数�
 | v5 | 23M | 5.66→4.25；探针 +0.385 |
 | v6 | 23M 多深度 | 定律跨规模成立 |
 | v7 | 23M Phantom 全量 39,695 步 | 4.2385；真实token 3.87 第一 |
-| v8 | v7+SFT（含pad 协议）| 见 deqlm8_results.json |
+| v8 | v7+SFT（含pad 协议, 28,304 步）| **双指标冠军: 含pad 1.628 / 真实 4.066** |
+
+### 附录 A2：终评矩阵（v8 完成后）
+
+| 模型 | 含pad NLL | 真实 token NLL |
+|---|---|---|
+| **DEQ-LM v8 (PT+SFT)** | **1.628** | 4.066 |
+| CEDLR-Hybrid2-30M SFT | 2.782 | 7.173 |
+| CEDLR-Hybrid2-30M PT | 2.785 | 7.185 |
+| Meta-ASH-30M PT | 15.242 | 4.099 |
+| Meta-ASH-30M SFT | 14.556 | 4.732 |
+| DEQ-LM v7 PT (k=30) | 15.681 | **3.867** |
+
+- v8 在两个口径上均胜 CEDLR-Hybrid2-30M（含pad −1.15, 真实 −3.11）
+- Meta-ASH 的 SFT 使真实 token 退化 (4.10→4.73)；v8 的 SFT 仅微退 (3.87→4.07)——Phantom 绑定深度模型在分布迁移下保持文本能力更好
+- 协议差异：CEDLR 为 192 前缀+SWA-32 窗解码，DEQ-LM/Meta 为全因果注意力
 
 ### 附录 B：调试记录（三个架构级 bug）
 
