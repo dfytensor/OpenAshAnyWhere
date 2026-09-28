@@ -1,6 +1,6 @@
-﻿#!/usr/bin/env python3
-"""终评: DEQ-LM v7 (23M, Phantom, 39695步) vs CEDLR-Hybrid2-30M PT, 同口径后缀 NLL (预测 x[193:256])."""
-import sys, os, random
+#!/usr/bin/env python3
+"""终评 v2: 掩码版后缀 NLL (只算非 pad 位置), v7 vs CEDLR-30M PT 同口径公平对比."""
+import sys, os, random, json
 import torch
 import torch.nn.functional as F
 
@@ -9,7 +9,7 @@ sys.path.insert(0, r"F:\OpenASH2605\copyfirst_redesign")
 HERE = os.path.dirname(os.path.abspath(__file__))
 PT_VAL = r"F:\OpenASH2605\minimind_data\pretrain_cached_1270238_256.pt"
 CF = r"F:\OpenASH2605\copyfirst_redesign"
-OUT = os.path.join(HERE, "deqlm7_vs_cedlr.json")
+OUT = os.path.join(HERE, "deqlm7_vs_cedlr2.json")
 V, DEV = 23005, "cuda"
 
 
@@ -25,32 +25,28 @@ def batches(val, nb=60, seed=777, bs=16):
 
 
 if __name__ == "__main__":
-    import json
     seqs = torch.load(PT_VAL, map_location="cpu", weights_only=True)
     val = seqs[:5000]
     results = {}
 
-    # ── CEDLR-Hybrid2-30M PT ──
     from bench_ced30 import CED30, P, Q
     m2 = CED30().to(DEV)
-    sd = torch.load(os.path.join(CF, "cedlr30_pt_full_v2.pth"), map_location=DEV, weights_only=True)
-    m2.load_state_dict(sd)
+    m2.load_state_dict(torch.load(os.path.join(CF, "cedlr30_pt_full_v2.pth"), map_location=DEV, weights_only=True))
     m2.eval()
     tot, tok = 0.0, 0
     for x in batches(val):
         ys = x[:, P + 1:P + Q]
         with torch.autocast("cuda", dtype=torch.bfloat16):
-            lo = m2(x)
-        lo = lo.float()
+            lo = m2(x).float()
         l = F.cross_entropy(lo[:, :-1].reshape(-1, V), ys.reshape(-1), reduction="none").view(x.shape[0], -1)
-        tot += l.sum().item()
-        tok += l.numel()
-    results["cedlr30_pt"] = round(tot / tok, 4)
-    print("CEDLR-Hybrid2-30M PT: suffix NLL = %.4f" % (tot / tok), flush=True)
+        msk = ys != 0
+        tot += l[msk].sum().item()
+        tok += msk.sum().item()
+    results["cedlr30_pt_masked"] = round(tot / tok, 4)
+    print("CEDLR-30M PT (掩码): suffix NLL = %.4f" % (tot / tok), flush=True)
     del m2
     torch.cuda.empty_cache()
 
-    # ── DEQ-LM v7 ──
     from deqlm_v5_30m import DEQLM30
     m = DEQLM30().to(DEV)
     m.load_state_dict(torch.load(os.path.join(HERE, "deqlm7_full.pth"), map_location=DEV, weights_only=True))
@@ -71,10 +67,11 @@ if __name__ == "__main__":
             ys = x[:, 1:]
             l = F.cross_entropy(lo[:, :-1].reshape(-1, V), ys.reshape(-1), reduction="none").view(x.shape[0], -1)
             l = l[:, 192:255]
-            tot += l.sum().item()
-            tok += l.numel()
-        results["deqlm7_k%d" % k] = round(tot / tok, 4)
-        print("DEQ-LM v7 k=%2d: suffix NLL = %.4f" % (k, tot / tok), flush=True)
+            msk = x[:, 193:256] != 0
+            tot += l[msk].sum().item()
+            tok += msk.sum().item()
+        results["deqlm7_k%d_masked" % k] = round(tot / tok, 4)
+        print("DEQ-LM v7 k=%2d (掩码): suffix NLL = %.4f" % (k, tot / tok), flush=True)
 
     json.dump(results, open(OUT, "w"), indent=2)
     print("saved", OUT)
