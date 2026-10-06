@@ -39,9 +39,11 @@ def multiscale_inv_softplus(ch=KV_H * SLOTS):
 
 
 class MARMSNorm(nn.Module):
-    """MA-RMSNorm: y = (x/RMS)·γ·s + α·log(RMS)·W  (ma_rms_frsm3.7 血统, s=2.0, α=0.1)."""
+    """MA-RMSNorm: y = (x/RMS)·γ·s + α·log(RMS)·W  (ma_rms_frsm3.7 血统).
+    v31b: s=2.0→1.0 — s=2 使 lr 峰值区有效步长翻倍, @2000 后 loss NaN (两次复现);
+    保留幅值注入路径 (log(RMS)·W), 去掉放大器."""
 
-    def __init__(self, dim, s=2.0, alpha=0.1):
+    def __init__(self, dim, s=1.0, alpha=0.1):
         super().__init__()
         self.s, self.alpha = s, alpha
         self.gamma = nn.Parameter(torch.ones(dim))
