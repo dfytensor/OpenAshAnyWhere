@@ -13,6 +13,7 @@ import deqlm_v24_hybrid2fast as M24
 import deqlm_v28_deltaloop as M28
 import deqlm_v30_kv4 as M30
 import deqlm_v31_multislot as M31
+import deqlm_v32_slotgate as M32
 from deqlm_v5_30m import PT_CACHE
 
 DEV = "cuda"
@@ -88,7 +89,8 @@ def main():
     ckpts = {"v24": (M24.Hybrid2FastLM, "deqlm24_pt_full.pth"),
              "v28": (M28.DeltaLoopLM, "deqlm28_pt_full.pth"),
              "v30": (M30.DeltaLoopLM, "deqlm30_pt_full.pth"),
-             "v31": (M31.DeltaLoopLM, "deqlm31_pt_full.pth")}
+             "v31": (M31.DeltaLoopLM, "deqlm31_pt_full.pth"),
+             "v32": (M32.DeltaLoopLM, "deqlm32_pt_full.pth")}
     res = {}
     eval_models = {}
     for name, (cls, ck) in ckpts.items():
