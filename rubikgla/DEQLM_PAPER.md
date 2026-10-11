@@ -317,6 +317,19 @@ Block = pre-norm causal attention + SwiGLU, α 可学习标量 (sigmoid 参数�
 
 按历代 @14k→终局放大系数 ×1.7~2.1，v30 投影落点 2.436~2.454。**截至本节，零 softmax 尚无超越 v24 的证据；v30 是第一个进入噪声带的候选。** 工程注记：v30 首跑在 @14k 因 GPU TDR 静默死亡（nvlddmkm 事件，共享 GPU 邻居进程），补上每 2000 步断点（含 rng 状态，批流无缝）+ 异常落盘后重启，中期曲线逐位复现。
 
+### 5.10.1 Triton 融合 Δ 扫描（工程注记，v31 提速 2.8×）
+
+**瓶颈测量**：把扫描换成恒等的地板实验显示扫描占训练步时 60-70%；torch profiler 拆解 v31 单步：扫描 fwd 37ms + bwd 59ms（GPU 时间 50%）、CE 8.5ms、GEMM 26ms、杂项 27ms（GPU 合计 193ms/步）。
+
+**设计**（`delta_triton.py`）：网格 (b, group, v-half)——状态 S(32×32, fp32) 按 v 维二分、256 步递归全在寄存器内完成；k/rate/η 全量加载；槽求和与组内共享 q 的读出融合进核；跨 v-split 的 dk/dη/drate/dq 用 fp32 原子加汇合，dv 无冲突直写。反向为**逐步精确 VJP**（r=kᵀS 与 t1=S−η⊙k⊙r 双路径手推），逆序循环读前向存下的 fp32 状态轨迹，不再物化 A/W 大张量。全部维度 constexpr，单次编译。
+
+**结果**：单站 fwd+bwd **3.8ms vs chunked-inductor 20ms（5.3×）**；五路梯度 vs fp32 显式递归参考 rel≈1.4e-3 全绿（`test_delta_triton.py`）；训练端到端 **940→339ms/步（2.8×）**，全部零 softmax 实验共用。
+
+**三条工程教训（复现者必读）**：
+1. **分片缓冲布局竞争**（最隐蔽）：状态轨迹初版按局部列宽 (B,L,G,DH,VH) 分配，两个 v-split 程序向同一批列互写。定位路径：VSPLIT=1（无竞争）全绿/ VSPLIT=2 中 dk/dr/de/dq 全错而 dv 独对 → 三个最小原子复现脚本排除 atomic 本身 → 布局定罪。教训：分片程序共享缓冲，列偏移必须全局。
+2. **bf16 状态轨迹**：轨迹 bf16 存储时，梯度误差经 256 步复合放大到 10%+（前向读数无恙、反向外溢）；改 fp32（168MB）后 rel 降至 1.4e-3。
+3. **启动环境陷阱**：Windows 后台启动不继承先前 shell 环境（`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` 缺失）→ 默认分配器 cudaMalloc 串行化 → 同模块同 GPU 339→900ms/步。该坑曾伪装成"进程僵死"两次（py-spy 显示一切在正常跑）。
+
 ## 6. 负结果与诚实边界
 
 | 主张 | 结果 |
@@ -392,7 +405,8 @@ Block = pre-norm causal attention + SwiGLU, α 可学习标量 (sigmoid 参数�
 | v27 | 零 softmax：多尺度速率门+时标分层循环 | @14k +0.046 中止 |
 | **v28** | 零 softmax：23 站全 Gated-Delta | **真实 2.5148（零 softmax 纪录）** |
 | v29 | v28+v24 原版 rubik 桥 | 真实 2.5290（桥假说排除）|
-| v30 | v28+四项诊断修复（kv5/η0.12 起步/非归一 k/地板 5e-4） | 进行中（@14k +0.007）|
+| v30 | v28+四项诊断修复（kv5/η0.12 起步/非归一 k/地板 5e-4） | 真实 2.4949（零 softmax 纪录）|
+| v31 | v30+双槽 Delta+MA-RMSNorm+Triton 融合扫描 | 进行中（@2k 3.6964 vs v24 3.7466）|
 
 ### 附录 A2：终评矩阵（最终完整版，后缀 NLL 含pad / 真实token）
 
@@ -451,6 +465,8 @@ python matrix30_masked.py / matrix30_final.py   # 30M 全模型掩码矩阵
 python gen_compare.py                           # 定性生成对比
 python deqlm_v24_hybrid2fast.py                 # v24 冠军（hybrid2 双轴）
 python deqlm_v28_deltaloop.py / v29 / v30_kv4   # 零 softmax 线 v26→v30
+python deqlm_v31_multislot.py                   # v31 双槽+MA-RMSNorm（Triton 融合扫描）
+python test_delta_triton.py                     # Triton kernel 正确性（5 路梯度 vs fp32 参考）
 python needle_eval.py / needle_diag.py          # OOD 针测验 + 前向变体诊断
 python copy_eval.py / gate_probe.py             # 分布内复制分带 + 门探针
 ```
