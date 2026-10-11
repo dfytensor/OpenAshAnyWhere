@@ -29,6 +29,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 LOG = os.path.join(HERE, "deqlm25.log")
 OUT = os.path.join(HERE, "deqlm25_results.json")
 CKPT = os.path.join(HERE, "deqlm25_pt_full.pth")
+RESUME = os.path.join(HERE, "deqlm25_resume.pth")
 
 
 def log(msg):
@@ -162,35 +163,55 @@ def main():
     t0 = time.time()
     rng = random.Random(42)
     B_MICRO = 16
-    for st in range(PT_STEPS):
-        for g in opt.param_groups:
-            g["lr"] = lr_at(st)
-        m.train()
-        x, y = get_batch(train, bs=B_MICRO, device=DEV, rng=rng)
-        x2, y2 = get_batch(train, bs=B_MICRO, device=DEV, rng=rng)
-        opt.zero_grad(set_to_none=True)
-        with torch.autocast("cuda", dtype=torch.bfloat16):
-            lo = m(x)
-        l1 = F.cross_entropy(lo.float().reshape(-1, V), y.reshape(-1), ignore_index=0)
-        if torch.isfinite(l1):
-            (l1 * 0.5).backward()
-        with torch.autocast("cuda", dtype=torch.bfloat16):
-            lo2 = m(x2)
-        l2 = F.cross_entropy(lo2.float().reshape(-1, V), y2.reshape(-1), ignore_index=0)
-        if torch.isfinite(l2):
-            (l2 * 0.5).backward()
-        if not (torch.isfinite(l1) and torch.isfinite(l2)):
+    start_step = 0
+    if os.path.exists(RESUME):
+        ck = torch.load(RESUME, map_location="cpu")
+        m.load_state_dict(ck["model"])
+        opt.load_state_dict(ck["opt"])
+        rng.setstate(ck["rng"])
+        start_step = ck["st"]
+        log("v25 续跑: 从 step %d 恢复 (批次流与原 seed42 流严格衔接)" % start_step)
+    try:
+        for st in range(start_step, PT_STEPS):
+            for g in opt.param_groups:
+                g["lr"] = lr_at(st)
+            m.train()
+            x, y = get_batch(train, bs=B_MICRO, device=DEV, rng=rng)
+            x2, y2 = get_batch(train, bs=B_MICRO, device=DEV, rng=rng)
             opt.zero_grad(set_to_none=True)
-            continue
-        torch.nn.utils.clip_grad_norm_(m.parameters(), 1.0)
-        opt.step()
-        if st % 2000 == 0:
-            alphas = "%.3f/%.3f" % (m.loop_a.alpha().item(), m.loop_c.alpha().item())
-            log("%d/%d loss=%.4f a=[%s] (%.0fms/步, ETA %.1f时)"
-                % (st, PT_STEPS, (0.5 * (l1 + l2)).item(), alphas,
-                   (time.time() - t0) / (st + 1) * 1000,
-                   (PT_STEPS - st) * (time.time() - t0) / (st + 1) / 3600))
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                lo = m(x)
+            l1 = F.cross_entropy(lo.float().reshape(-1, V), y.reshape(-1), ignore_index=0)
+            if torch.isfinite(l1):
+                (l1 * 0.5).backward()
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                lo2 = m(x2)
+            l2 = F.cross_entropy(lo2.float().reshape(-1, V), y2.reshape(-1), ignore_index=0)
+            if torch.isfinite(l2):
+                (l2 * 0.5).backward()
+            if not (torch.isfinite(l1) and torch.isfinite(l2)):
+                opt.zero_grad(set_to_none=True)
+                continue
+            torch.nn.utils.clip_grad_norm_(m.parameters(), 1.0)
+            opt.step()
+            if st % 2000 == 0:
+                alphas = "%.3f/%.3f" % (m.loop_a.alpha().item(), m.loop_c.alpha().item())
+                log("%d/%d loss=%.4f a=[%s] (%.0fms/步, ETA %.1f时)"
+                    % (st, PT_STEPS, (0.5 * (l1 + l2)).item(), alphas,
+                       (time.time() - t0) / (st - start_step + 1) * 1000,
+                       (PT_STEPS - st) * (time.time() - t0) / (st - start_step + 1) / 3600))
+                if st > 0:
+                    torch.save(dict(model=m.state_dict(), opt=opt.state_dict(),
+                                    rng=rng.getstate(), st=st + 1), RESUME)
+    except BaseException as e:
+        import traceback
+        log("v25 异常 @step %s: %r\n%s" % (st if 'st' in dir() else "?", e, traceback.format_exc()))
+        torch.save(dict(model=m.state_dict(), opt=opt.state_dict(),
+                        rng=rng.getstate(), st=st + 1), RESUME)
+        raise
     torch.save(m.state_dict(), CKPT)
+    if os.path.exists(RESUME):
+        os.remove(RESUME)
     a, mk = masked_suffix_eval(m, val)
     log("v25 完成: 含pad=%.4f 真实=%.4f  [v24(带旋转)=2.4241, v20=2.4284]" % (a, mk))
     json.dump(dict(all=a, masked=mk,
