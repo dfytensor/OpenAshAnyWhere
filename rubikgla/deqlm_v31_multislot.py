@@ -18,7 +18,7 @@ from torch.utils.checkpoint import checkpoint
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from deqlm_v19_tuned23m import masked_suffix_eval
 from deqlm_v5_30m import get_batch, PT_CACHE
-from scan import chunked_affine_scan
+from delta_triton import delta_scan_triton
 
 DEV = "cuda"
 V, D, H = 23005, 320, 10
@@ -57,25 +57,16 @@ class MARMSNorm(nn.Module):
 
 
 def delta_scan_kv(k, v, rate, eta, q):
-    """k,v,rate,eta: (B,L,KV*S,dh); q: (B,L,H,dh). 槽=虚拟 kv 头扫描, 组内 q 共享, 槽求和.
-    提速版 (v31c): chunked 两级扫描 (HS→chunked −26%) + 槽求和提前 (线性恒等) + bf16 直接构造.
-    859→623ms/步, loss 逐位一致 (4 位小数)."""
-    B, L, G, dh = k.shape
-    H_ = q.shape[2]
-    kn = k.to(torch.bfloat16)
-    lam = torch.exp(-rate).to(torch.bfloat16)
-    eta_ = eta.to(torch.bfloat16)
-    I = torch.eye(dh, device=k.device, dtype=torch.bfloat16).view(1, 1, 1, dh, dh)
-    A = lam.unsqueeze(-1) * (I - eta_.unsqueeze(-1) * (kn.unsqueeze(-1) * kn.unsqueeze(-2)))
-    W = kn.unsqueeze(-1) * v.to(torch.bfloat16).unsqueeze(-2)
-    _, S = chunked_affine_scan(A, W, chunk=32)                            # (B,L,G,dh,dh)
-    Ss = S.float().view(B, L, KV_H, SLOTS, dh, dh).sum(3)                 # Σ槽 (B,L,KV,dh,dh)
-    qg = q.float().view(B, L, KV_H, H_ // KV_H, dh)
-    y = torch.einsum("blgpq,blgmq->blgmp", Ss, qg)                        # (B,L,KV,KVG,dh)
-    return y.reshape(B, L, H_ * dh)
+    """Triton 融合扫描 (2026-10-11): 寄存器常驻递归 + 手写 VJP, 3.8ms vs chunked-inductor 20ms (5.3x).
+    k,v,rate,eta: (B,L,KV*S,dh); q: (B,L,H,dh). 返回 y (B,L,H*dh). 槽求和在外层.
+    数值对照: y/5路梯度 vs fp32 参考 rel≈1.4e-3 (test_delta_triton.py 全绿)."""
+    y = delta_scan_triton(k, v, rate, eta, q, KV_H, SLOTS, H // KV_H)   # (B,L,G,KVG,dh)
+    B, L = k.shape[0], k.shape[1]
+    y = y.view(B, L, KV_H, SLOTS, H // KV_H, DH).sum(3)
+    return y.reshape(B, L, H * DH)
 
 
-DELTA_FN = torch.compile(delta_scan_kv)
+DELTA_FN = delta_scan_kv
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOG = os.path.join(HERE, "deqlm31.log")
