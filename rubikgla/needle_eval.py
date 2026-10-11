@@ -11,6 +11,7 @@ sys.path.insert(0, HERE)
 import deqlm_v24_hybrid2fast as M24
 import deqlm_v28_deltaloop as M28
 import deqlm_v30_kv4 as M30
+import deqlm_v31_multislot as M31
 from deqlm_v5_30m import PT_CACHE
 
 DEV = "cuda"
@@ -76,6 +77,9 @@ def main():
     m = M30.DeltaLoopLM()
     m.load_state_dict(torch.load(os.path.join(HERE, "deqlm30_pt_full.pth"), map_location="cpu"))
     models["v30"] = m.to(DEV).eval()
+    m = M31.DeltaLoopLM()
+    m.load_state_dict(torch.load(os.path.join(HERE, "deqlm31_pt_full.pth"), map_location="cpu"))
+    models["v31"] = m.to(DEV).eval()
 
     res = {}
     for name, m in models.items():

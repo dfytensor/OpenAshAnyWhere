@@ -144,6 +144,8 @@ class DeltaAttn(nn.Module):
                 out = self._scan_core(x, it)
         if torch.is_autocast_enabled():
             out = out.to(torch.bfloat16)
+        else:
+            out = out.to(x.dtype)          # eval 无 autocast: 对齐权重 dtype (fp32)
         return x + self.out(out)
 
 
