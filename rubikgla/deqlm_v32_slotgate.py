@@ -115,7 +115,7 @@ class DeltaAttn(nn.Module):
         self.rho_p = nn.Parameter(torch.full((KV_H, SLOTS, self.dh), math.log(0.8 / 0.2)))
         self.w_gate = nn.Linear(D, KV_H * SLOTS, bias=True)
         nn.init.zeros_(self.w_gate.weight)
-        nn.init.zeros_(self.w_gate.bias)                   # g = 2σ(0) = 1 → 精确复现 v31 槽求和
+        nn.init.zeros_(self.w_gate.bias)                   # g_raw=0.5 → 归一化后 g=1，精确复现 v31
 
     def _scan_core(self, x, it):
         B, L, _ = x.shape
@@ -132,7 +132,8 @@ class DeltaAttn(nn.Module):
             rate = rate * (torch.sigmoid(self.rho_p) ** it).transpose(1, 2).reshape(1, 1, G, self.dh)
         eta = torch.sigmoid(self.w_eta(h)).view(B, L, G, self.dh)
         y = DELTA_FN(k, v, rate, eta, q)                    # (B,L,KV,S,KVG,dh)
-        g = 2.0 * torch.sigmoid(self.w_gate(h)).view(B, L, self.KV, self.S, 1, 1)
+        g_raw = torch.sigmoid(self.w_gate(h)).view(B, L, self.KV, self.S, 1, 1)
+        g = g_raw * (self.S / g_raw.sum(3, keepdim=True))   # Σ槽 g ≡ S(=2) 恒定: 只选择不放大
         return (y * g).sum(3).reshape(B, L, H * self.dh)
 
     def forward(self, x, it=0):
@@ -237,6 +238,7 @@ def main():
 
     t0 = time.time()
     B_MICRO = 16
+    nan_run = 0
     try:
         for st in range(start_step, PT_STEPS):
             for g in opt.param_groups:
@@ -257,13 +259,24 @@ def main():
                 (l2 * 0.5).backward()
             if not (torch.isfinite(l1) and torch.isfinite(l2)):
                 opt.zero_grad(set_to_none=True)
+                nan_run += 1
+                if nan_run == 1:
+                    log("⚠ v32 NaN 首现 @step %d (l1=%s l2=%s)" % (st, l1.item(), l2.item()))
+                if nan_run > 200:
+                    log("v32 NaN 失控 @step %d (连续 %d 步) — 存断点退出" % (st, nan_run))
+                    torch.save(dict(model=m.state_dict(), opt=opt.state_dict(),
+                                    rng=rng.getstate(), st=st), RESUME)
+                    raise RuntimeError("NaN runaway at step %d" % st)
                 continue
+            nan_run = 0
             torch.nn.utils.clip_grad_norm_(m.parameters(), 1.0)
             opt.step()
             if st % 2000 == 0:
                 alphas = "%.3f/%.3f" % (m.loop_a.alpha().item(), m.loop_c.alpha().item())
-                log("%d/%d loss=%.4f a=[%s] (%.0fms/步, ETA %.1f时)"
-                    % (st, PT_STEPS, (0.5 * (l1 + l2)).item(), alphas,
+                gA = torch.sigmoid(m.loop_a.attn.attn.w_gate.bias).mean().item()
+                gB = torch.sigmoid(m.bridge.attn.w_gate.bias).mean().item()
+                log("%d/%d loss=%.4f a=[%s] g=[%.2f/%.2f] (%.0fms/步, ETA %.1f时)"
+                    % (st, PT_STEPS, (0.5 * (l1 + l2)).item(), alphas, gA, gB,
                        (time.time() - t0) / (st - start_step + 1) * 1000,
                        (PT_STEPS - st) * (time.time() - t0) / (st - start_step + 1) / 3600))
                 if st > 0:
