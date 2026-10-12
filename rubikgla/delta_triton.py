@@ -12,14 +12,15 @@ import torch.nn as nn
 import triton
 import triton.language as tl
 
-VSPLIT = int(os.environ.get("DELTA_VSPLIT", "2"))   # 调试用: 1=单程序全v(无atomic跨程序)
+VSPLIT = int(os.environ.get("DELTA_VSPLIT", "1"))   # 1=单程序全v(默认, 无原子竞争, 直写, 快28%); 2=旧对照
+STAGES = int(os.environ.get("DELTA_STAGES", "5"))   # tl.range 流水线级数 (预取)
 
 
 @triton.jit
 def delta_fwd_kernel(
     K, V, RATE, ETA, Q, GROT, OUT, SSTORE,
     L: tl.constexpr, G: tl.constexpr, KV: tl.constexpr, H: tl.constexpr,
-    DH: tl.constexpr, VH: tl.constexpr, VSPLIT: tl.constexpr, KVG: tl.constexpr,
+    DH: tl.constexpr, VH: tl.constexpr, VSPLIT: tl.constexpr, KVG: tl.constexpr, STAGES: tl.constexpr, HAS_ROT: tl.constexpr,
 ):
     pid = tl.program_id(0)
     ns = G * VSPLIT
@@ -43,13 +44,16 @@ def delta_fwd_kernel(
     s_base = SSTORE + (b * L * G + g) * DH * DH
     g_base = GROT + b * L * DH * DH               # G 只按 (b,t) 索引 (站内全体共享)
 
-    for t in range(L):
+    for t in tl.range(0, L, num_stages=STAGES):
         kt = tl.load(k_base + t * G * DH + offs_i).to(tl.float32)
         vt = tl.load(v_base + t * G * DH + offs_js).to(tl.float32)
         lam = tl.exp(-tl.load(r_base + t * G * DH + offs_i).to(tl.float32))
         et = tl.load(e_base + t * G * DH + offs_i).to(tl.float32)
-        Gt = tl.load(g_base + t * DH * DH + offs_i[:, None] * DH + offs_i[None, :]).to(tl.float32)
-        R = tl.dot(Gt, S, input_precision="ieee")                  # 状态侧旋转 (v33)
+        if HAS_ROT:
+            Gt = tl.load(g_base + t * DH * DH + offs_i[:, None] * DH + offs_i[None, :]).to(tl.float32)
+            R = tl.dot(Gt, S, input_precision="ieee")
+        else:
+            R = S
         rr = tl.sum(kt[:, None] * R, axis=0)                       # (VH,)
         S = lam[:, None] * (R - et[:, None] * kt[:, None] * rr[None, :]) + kt[:, None] * vt[None, :]
         tl.store(s_base + t * G * DH * DH + offs_i[:, None] * DH + offs_js[None, :],
@@ -65,7 +69,7 @@ def delta_fwd_kernel(
 def delta_bwd_kernel(
     K, V, RATE, ETA, Q, GROT, DY, SSTORE, DK, DV, DRATE, DETA, DQ, DGROT,
     L: tl.constexpr, G: tl.constexpr, KV: tl.constexpr, H: tl.constexpr,
-    DH: tl.constexpr, VH: tl.constexpr, VSPLIT: tl.constexpr, KVG: tl.constexpr,
+    DH: tl.constexpr, VH: tl.constexpr, VSPLIT: tl.constexpr, KVG: tl.constexpr, STAGES: tl.constexpr, HAS_ROT: tl.constexpr,
 ):
     pid = tl.program_id(0)
     ns = G * VSPLIT
@@ -95,12 +99,14 @@ def delta_bwd_kernel(
 
     dS = tl.zeros((DH, VH), dtype=tl.float32)
 
-    for t in range(L - 1, -1, -1):
+    for _i in tl.range(0, L, num_stages=STAGES):
+        t = (L - 1) - _i
         kt = tl.load(k_base + t * G * DH + offs_i).to(tl.float32)
         vt = tl.load(v_base + t * G * DH + offs_js).to(tl.float32)
         lam = tl.exp(-tl.load(r_base + t * G * DH + offs_i).to(tl.float32))
         et = tl.load(e_base + t * G * DH + offs_i).to(tl.float32)
-        Gt = tl.load(g_base + t * DH * DH + offs_i[:, None] * DH + offs_i[None, :]).to(tl.float32)
+        if HAS_ROT:
+            Gt = tl.load(g_base + t * DH * DH + offs_i[:, None] * DH + offs_i[None, :]).to(tl.float32)
 
         Sp = tl.load(s_base + t * G * DH * DH + offs_i[:, None] * DH + offs_js[None, :]).to(tl.float32)
         if t > 0:
@@ -118,7 +124,10 @@ def delta_bwd_kernel(
             dS += qm[:, None] * dym[None, :]
 
         # 步 VJP (R = G S_{t-1} 为旋转后状态)
-        R = tl.dot(Gt, Sprev, input_precision="ieee")               # (DH,VH)
+        if HAS_ROT:
+            R = tl.dot(Gt, Sprev, input_precision="ieee")
+        else:
+            R = Sprev
         rr = tl.sum(kt[:, None] * R, axis=0)                        # (VH,)
         t1 = R - et[:, None] * kt[:, None] * rr[None, :]
         gu = dS
@@ -133,14 +142,23 @@ def delta_bwd_kernel(
         dk_c = tl.sum(dr[None, :] * R, axis=1)                      # Σ_j dr_j R_ij
         drate = -lam * dlam
         tl.store(dv_base + t * G * DH + offs_js, dv)
-        tl.atomic_add(dk_base + t * G * DH + offs_i, dk_a + dk_b + dk_c)
-        tl.atomic_add(dr_base + t * G * DH + offs_i, drate)
-        tl.atomic_add(de_base + t * G * DH + offs_i, det)
+        if VSPLIT == 1:
+            # VSPLIT=1: (b,t,g) 所有权唯一, 直写 (省原子开销); DQ 仍原子(跨槽共享 q 头)
+            tl.store(dk_base + t * G * DH + offs_i, dk_a + dk_b + dk_c)
+            tl.store(dr_base + t * G * DH + offs_i, drate)
+            tl.store(de_base + t * G * DH + offs_i, det)
+        else:
+            tl.atomic_add(dk_base + t * G * DH + offs_i, dk_a + dk_b + dk_c)
+            tl.atomic_add(dr_base + t * G * DH + offs_i, drate)
+            tl.atomic_add(de_base + t * G * DH + offs_i, det)
 
-        dR = gt1 + kt[:, None] * dr[None, :]                        # grad wrt R
-        dGt = tl.dot(dR, tl.trans(Sprev), input_precision="ieee")   # dG = dR @ S_prevᵀ (部分和, 跨 vh atomic)
-        tl.atomic_add(dg_base + t * DH * DH + offs_i[:, None] * DH + offs_i[None, :], dGt)
-        dS = tl.dot(tl.trans(Gt), dR, input_precision="ieee")       # grad wrt S_{t-1} = Gᵀ dR
+        dR = gt1 + kt[:, None] * dr[None, :]
+        if HAS_ROT:
+            dGt = tl.dot(dR, tl.trans(Sprev), input_precision="ieee")
+            tl.atomic_add(dg_base + t * DH * DH + offs_i[:, None] * DH + offs_i[None, :], dGt)
+            dS = tl.dot(tl.trans(Gt), dR, input_precision="ieee")
+        else:
+            dS = dR
 
 
 class DeltaScanTriton(torch.autograd.Function):
@@ -150,12 +168,18 @@ class DeltaScanTriton(torch.autograd.Function):
         H = q.shape[2]
         VH = DH // VSPLIT
         k = k.contiguous(); v = v.contiguous(); rate = rate.contiguous()
-        eta = eta.contiguous(); q = q.contiguous(); grot = grot.contiguous()
+        eta = eta.contiguous(); q = q.contiguous()
+        ctx.has_rot = grot is not None
+        if ctx.has_rot:
+            grot = grot.contiguous()
+        else:
+            grot = k                     # dummy: HAS_ROT=0 时内核从不读
+        HAS_ROT_ = 1 if ctx.has_rot else 0
         out = torch.empty(B, L, G, kvg, DH, device=k.device, dtype=torch.bfloat16)
         sstore = torch.empty(B, L, G, DH, DH, device=k.device, dtype=torch.float32)
         grid = (B * G * VSPLIT,)
         delta_fwd_kernel[grid](k, v, rate, eta, q, grot, out, sstore,
-                               L=L, G=G, KV=kv, H=H, DH=DH, VH=VH, VSPLIT=VSPLIT, KVG=kvg)
+                               L=L, G=G, KV=kv, H=H, DH=DH, VH=VH, VSPLIT=VSPLIT, KVG=kvg, STAGES=STAGES, HAS_ROT=HAS_ROT_)
         ctx.save_for_backward(k, v, rate, eta, q, grot, sstore)
         ctx.kv, ctx.kvg = kv, kvg
         return out
@@ -173,17 +197,15 @@ class DeltaScanTriton(torch.autograd.Function):
         de = torch.zeros_like(dk)
         dq = torch.zeros((B, L, H, DH), device=k.device, dtype=torch.float32)
         dg = torch.zeros((B, L, DH, DH), device=k.device, dtype=torch.float32)
+        HAS_ROT_ = 1 if ctx.has_rot else 0
         grid = (B * G * VSPLIT,)
         delta_bwd_kernel[grid](k, v, rate, eta, q, grot, dy, sstore, dk, dv, dr, de, dq, dg,
-                               L=L, G=G, KV=ctx.kv, H=H, DH=DH, VH=VH, VSPLIT=VSPLIT, KVG=ctx.kvg)
+                               L=L, G=G, KV=ctx.kv, H=H, DH=DH, VH=VH, VSPLIT=VSPLIT, KVG=ctx.kvg, STAGES=STAGES, HAS_ROT=HAS_ROT_)
         return (dk.to(k.dtype), dv.to(v.dtype), dr.to(rate.dtype), de.to(eta.dtype),
-                dq.to(q.dtype), dg.to(grot.dtype), None, None, None)
+                dq.to(q.dtype), (dg.to(grot.dtype) if ctx.has_rot else None), None, None, None)
 
 
 def delta_scan_triton(k, v, rate, eta, q, kv, slots, kvg, grot=None):
-    """k,v,rate,eta: (B,L,KV*S,dh); q: (B,L,H,dh); grot: (B,L,dh,dh) 旋转 (可选).
+    """k,v,rate,eta: (B,L,KV*S,dh); q: (B,L,H,dh); grot: (B,L,dh,dh) 旋转 (可选, 缺省=无旋转快路径).
     返回 y (B,L,KV*S,KVG,dh)."""
-    B, L, G, DH = k.shape
-    if grot is None:
-        grot = torch.eye(DH, device=k.device, dtype=torch.bfloat16).view(1, 1, DH, DH).expand(B, L, DH, DH)
     return DeltaScanTriton.apply(k, v, rate, eta, q, grot, kv, slots, kvg)
