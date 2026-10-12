@@ -259,6 +259,7 @@ def main():
     t0 = time.time()
     B_MICRO = 16
     nan_run = 0
+    nan_grad = 0
     try:
         for st in range(start_step, PT_STEPS):
             for g in opt.param_groups:
@@ -289,7 +290,18 @@ def main():
                     raise RuntimeError("NaN runaway at step %d" % st)
                 continue
             nan_run = 0
-            torch.nn.utils.clip_grad_norm_(m.parameters(), 1.0)
+            gn = torch.nn.utils.clip_grad_norm_(m.parameters(), 1.0)
+            if not torch.isfinite(gn):
+                opt.zero_grad(set_to_none=True)
+                nan_grad += 1
+                if nan_grad == 1:
+                    log("⚠ v33 梯度 NaN @step %d — 跳过更新 (哨兵)" % st)
+                if nan_grad > 500:
+                    log("v33 梯度 NaN 失控 @step %d — 存断点退出" % st)
+                    torch.save(dict(model=m.state_dict(), opt=opt.state_dict(),
+                                    rng=rng.getstate(), st=st), RESUME)
+                    raise RuntimeError("grad NaN runaway at step %d" % st)
+                continue
             opt.step()
             if st % 2000 == 0:
                 alphas = "%.3f/%.3f" % (m.loop_a.alpha().item(), m.loop_c.alpha().item())
