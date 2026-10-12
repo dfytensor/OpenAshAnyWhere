@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """自然复制测试 (in-distribution copy recall): 针测验的分布内对应.
 对位置 p∈[193,255]: 查询 = (x[p-2],x[p-1]), 目标 = x[p].
   A组 repeat: 该 bigram 在 d<p-2 复现过, 且早次续接 v'=x[d+2] 恰等于 x[p] → 模型应召回续接
@@ -10,6 +10,7 @@ import torch
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import deqlm_v24_hybrid2fast as M24
+import deqlm_v25_gla as M25
 import deqlm_v28_deltaloop as M28
 import deqlm_v30_kv4 as M30
 import deqlm_v31_multislot as M31
@@ -19,7 +20,7 @@ from deqlm_v5_30m import PT_CACHE
 
 DEV = "cuda"
 N_A, N_B, MAXB = 3000, 3000, 128
-BS = 64
+BS = 16
 RES = os.path.join(HERE, "copy_results.json")
 
 
@@ -88,6 +89,7 @@ def main():
           % (ns, len(A), len(B), sum(t["dist"] for t in A) / max(1, len(A))))
 
     ckpts = {"v24": (M24.Hybrid2FastLM, "deqlm24_pt_full.pth"),
+             "v25": (M25.GLAHybridLM, "deqlm25_pt_full.pth"),
              "v31": (M31.DeltaLoopLM, "deqlm31_pt_full.pth"),
              "v33": (M33.DeltaLoopLM, "deqlm33_pt_full.pth")}
     res = {}
