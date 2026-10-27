@@ -18,9 +18,10 @@ STAGES = int(os.environ.get("DELTA_STAGES", "5"))   # tl.range 流水线级数 (
 
 @triton.jit
 def delta_fwd_kernel(
-    K, V, RATE, ETA, Q, GROT, OUT, SSTORE,
+    K, V, RATE, ETA, Q, GROT, S0, OUT, SSTORE,
     L: tl.constexpr, G: tl.constexpr, KV: tl.constexpr, H: tl.constexpr,
     DH: tl.constexpr, VH: tl.constexpr, VSPLIT: tl.constexpr, KVG: tl.constexpr, STAGES: tl.constexpr, HAS_ROT: tl.constexpr,
+    HAS_S0: tl.constexpr,
 ):
     pid = tl.program_id(0)
     ns = G * VSPLIT
@@ -34,6 +35,9 @@ def delta_fwd_kernel(
     offs_jl = tl.arange(0, VH)                    # v 维局部 (v 切分内)
 
     S = tl.zeros((DH, VH), dtype=tl.float32)
+    if HAS_S0:
+        s0_base = S0 + (b * G + g) * DH * DH
+        S = tl.load(s0_base + offs_i[:, None] * DH + offs_jl[None, :]).to(tl.float32)
 
     k_base = K + (b * L * G + g) * DH
     v_base = V + (b * L * G + g) * DH
@@ -163,7 +167,7 @@ def delta_bwd_kernel(
 
 class DeltaScanTriton(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, k, v, rate, eta, q, grot, kv, slots, kvg):
+    def forward(ctx, k, v, rate, eta, q, grot, s0, kv, slots, kvg):
         B, L, G, DH = k.shape
         H = q.shape[2]
         VH = DH // VSPLIT
@@ -174,12 +178,18 @@ class DeltaScanTriton(torch.autograd.Function):
             grot = grot.contiguous()
         else:
             grot = k                     # dummy: HAS_ROT=0 时内核从不读
+        ctx.has_s0 = s0 is not None
+        if ctx.has_s0:
+            s0 = s0.contiguous()
+        else:
+            s0 = k                       # dummy: HAS_S0=0 时内核从不读
         HAS_ROT_ = 1 if ctx.has_rot else 0
+        HAS_S0_ = 1 if ctx.has_s0 else 0
         out = torch.empty(B, L, G, kvg, DH, device=k.device, dtype=torch.bfloat16)
         sstore = torch.empty(B, L, G, DH, DH, device=k.device, dtype=torch.float32)
         grid = (B * G * VSPLIT,)
-        delta_fwd_kernel[grid](k, v, rate, eta, q, grot, out, sstore,
-                               L=L, G=G, KV=kv, H=H, DH=DH, VH=VH, VSPLIT=VSPLIT, KVG=kvg, STAGES=STAGES, HAS_ROT=HAS_ROT_)
+        delta_fwd_kernel[grid](k, v, rate, eta, q, grot, s0, out, sstore,
+                               L=L, G=G, KV=kv, H=H, DH=DH, VH=VH, VSPLIT=VSPLIT, KVG=kvg, STAGES=STAGES, HAS_ROT=HAS_ROT_, HAS_S0=HAS_S0_)
         ctx.save_for_backward(k, v, rate, eta, q, grot, sstore)
         ctx.kv, ctx.kvg = kv, kvg
         return out
@@ -198,14 +208,36 @@ class DeltaScanTriton(torch.autograd.Function):
         dq = torch.zeros((B, L, H, DH), device=k.device, dtype=torch.float32)
         dg = torch.zeros((B, L, DH, DH), device=k.device, dtype=torch.float32)
         HAS_ROT_ = 1 if ctx.has_rot else 0
+        HAS_S0_ = 1 if ctx.has_s0 else 0
         grid = (B * G * VSPLIT,)
         delta_bwd_kernel[grid](k, v, rate, eta, q, grot, dy, sstore, dk, dv, dr, de, dq, dg,
                                L=L, G=G, KV=ctx.kv, H=H, DH=DH, VH=VH, VSPLIT=VSPLIT, KVG=ctx.kvg, STAGES=STAGES, HAS_ROT=HAS_ROT_)
+        # 注: HAS_S0 时 dS0 = t=0 处的 dS, 本实验 A 冻结不需要, 返回 None
         return (dk.to(k.dtype), dv.to(v.dtype), dr.to(rate.dtype), de.to(eta.dtype),
-                dq.to(q.dtype), (dg.to(grot.dtype) if ctx.has_rot else None), None, None, None)
+                dq.to(q.dtype), (dg.to(grot.dtype) if ctx.has_rot else None),
+                None, None, None, None)
 
 
-def delta_scan_triton(k, v, rate, eta, q, kv, slots, kvg, grot=None):
-    """k,v,rate,eta: (B,L,KV*S,dh); q: (B,L,H,dh); grot: (B,L,dh,dh) 旋转 (可选, 缺省=无旋转快路径).
-    返回 y (B,L,KV*S,KVG,dh)."""
-    return DeltaScanTriton.apply(k, v, rate, eta, q, grot, kv, slots, kvg)
+def delta_scan_states(k, v, rate, eta, q, kv, slots, kvg, s0=None):
+    """无梯度: 返回 (y, 每站末状态 (B,G,dh,dh) fp32) — 接力接口用."""
+    B, L, G, DH = k.shape
+    H = q.shape[2]
+    VH = DH // VSPLIT
+    k = k.contiguous(); v = v.contiguous(); rate = rate.contiguous()
+    eta = eta.contiguous(); q = q.contiguous()
+    if s0 is None:
+        s0 = torch.zeros(B, G, DH, DH, device=k.device, dtype=torch.float32)
+    else:
+        s0 = s0.contiguous().float()
+    out = torch.empty(B, L, G, kvg, DH, device=k.device, dtype=torch.bfloat16)
+    sstore = torch.empty(B, L, G, DH, DH, device=k.device, dtype=torch.float32)
+    grid = (B * G * VSPLIT,)
+    delta_fwd_kernel[grid](k, v, rate, eta, q, k, s0, out, sstore,
+                           L=L, G=G, KV=kv, H=H, DH=DH, VH=VH, VSPLIT=VSPLIT, KVG=kvg, STAGES=STAGES, HAS_ROT=0, HAS_S0=1)
+    return out, sstore[:, -1].clone()
+
+
+def delta_scan_triton(k, v, rate, eta, q, kv, slots, kvg, grot=None, s0=None):
+    """k,v,rate,eta: (B,L,KV*S,dh); q: (B,L,H,dh); grot: (B,L,dh,dh) 旋转 (可选);
+    s0: (B,G,dh,dh) 初始状态 (可选, 接力注入). 返回 y (B,L,KV*S,KVG,dh)."""
+    return DeltaScanTriton.apply(k, v, rate, eta, q, grot, s0, kv, slots, kvg)
