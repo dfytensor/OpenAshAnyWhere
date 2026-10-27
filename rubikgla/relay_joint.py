@@ -47,7 +47,7 @@ log("params: A=%.2fM B=%.2fM adapter=%.3fM" % (
 t0 = time.time()
 nan_run = 0
 for st in range(STEPS):
-    lr = 4e-4 * min(1.0, st / 1000)
+    lr = 4e-4 * min(1.0, st / 2000)
     for g in opt.param_groups: g["lr"] = lr
     idsA, xB, yB = [], [], []
     for _ in range(BS):
@@ -72,7 +72,7 @@ for st in range(STEPS):
         h_proj = adapter(h_last.float()).to(torch.bfloat16)         # (B,320)
         # B 前向: 每站 S0 = h_proj 广播到 (B,G,DH,DH) 的外积近似
         # 简化: 直接加到 B 的嵌入上 (状态→初始上下文)
-        h_B = B.emb(xB) + h_proj.unsqueeze(1)                       # (B,127,320) 广播
+        h_B = B.emb(xB) + 0.1 * h_proj.unsqueeze(1)                       # (B,127,320) 广播
         # 通过 B 的站
         h_B = B.pre(h_B)
         h_B = B.loop_a(h_B)
@@ -90,7 +90,7 @@ for st in range(STEPS):
     gn = torch.nn.utils.clip_grad_norm_(params, 1.0)
     if torch.isfinite(gn): opt.step()
     if st % 2000 == 0:
-        log("%d/%d loss=%.4f gn=%.2f (%.0fms)" % (st, STEPS, loss.item(), gn.item(), (time.time()-t0)/(st+1)*1000))
+        log("%d/%d loss=%.4f gn=%.2f lr=%.2e (%.0fms)" % (st, STEPS, loss.item(), gn.item(), lr, (time.time()-t0)/(st+1)*1000))
 
 # 评测
 log("== 评测 ==")
@@ -112,7 +112,7 @@ def eval_relay(val, bs=16):
             h_A = A.emb(idsA); h_A = A.pre(h_A); h_A = A.loop_a(h_A)
             h_A = A.bridge(h_A); h_A = A.loop_c(h_A); h_A = A.post(h_A)
             h_proj = adapter(h_A[:, -1, :].float()).to(torch.bfloat16)
-            h_B = B.emb(x) + h_proj.unsqueeze(1)
+            h_B = B.emb(x) + 0.1 * h_proj.unsqueeze(1)
             h_B = B.pre(h_B); h_B = B.loop_a(h_B); h_B = B.bridge(h_B)
             h_B = B.loop_c(h_B); h_B = B.post(h_B)
             logits = B.head(B.ln_f(h_B))
