@@ -122,6 +122,13 @@ class DeltaAttn(nn.Module):
         self.w_gate = nn.Linear(D, KV_H * SLOTS * self.dh, bias=True)   # v36 写入门
         nn.init.zeros_(self.w_gate.weight)
         nn.init.constant_(self.w_gate.bias, 3.0)            # sigmoid≈0.95 近直通起步
+        self.use_gate = False                               # 由上层打开 (v2 checkpoint 兼容)
+        self.use_sel = False                                # RWKV-6 式低秩选择性衰减
+        self.sel_A = nn.Linear(D, 8, bias=False)            # 秩8 双线性: 重要token rate→0
+        self.sel_B = nn.Linear(8, KV_H * SLOTS * self.dh, bias=False)
+        self.sel_scale = nn.Parameter(torch.zeros(KV_H * SLOTS * self.dh))
+        nn.init.zeros_(self.sel_A.weight)
+        nn.init.zeros_(self.sel_B.weight)                   # 零初始化 = 恒等 (sel=0.5, scale=0)
         self.capture = False
         self.capture_bounds = None
         self._last_state = None
@@ -142,9 +149,13 @@ class DeltaAttn(nn.Module):
             vv = (vf + vc).transpose(1, 2).reshape(B, L, G, self.dh)
             rr = _F.softplus(self.w_rate(hh)).view(B, L, G, self.dh) * itmult
             ee = torch.sigmoid(self.w_eta(hh)).view(B, L, G, self.dh)
-            gg = torch.sigmoid(self.w_gate(hh)).view(B, L, G, self.dh)   # v36 写入门
-            kk = kk * gg
-            vv = vv * gg
+            if self.use_gate:
+                gg = torch.sigmoid(self.w_gate(hh)).view(B, L, G, self.dh)
+                kk = kk * gg
+                vv = vv * gg
+            if self.use_sel:
+                sel = torch.sigmoid(self.sel_B(self.sel_A(hh))).view(B, L, G, self.dh)
+                rr = rr * torch.exp(self.sel_scale.view(1, 1, G, self.dh) * (sel - 0.5))
             bnd = getattr(self, "capture_bounds", None)
             if bnd is not None:
                 yv, sb = _dt.delta_scan_states(kk, vv, rr, ee, qq, KV_H, SLOTS, H // KV_H, s0=s0, boundary_idx=bnd)
@@ -165,9 +176,13 @@ class DeltaAttn(nn.Module):
         rate = F.softplus(self.w_rate(h)).view(B, L, G, self.dh)
         rate = rate * itmult                                   # v31s: 恒乘法 (it=0 时 mult≡1, 精确等价)
         eta = torch.sigmoid(self.w_eta(h)).view(B, L, G, self.dh)
-        g = torch.sigmoid(self.w_gate(h)).view(B, L, G, self.dh)   # v36 写入门
-        k = k * g
-        v = v * g
+        if self.use_gate:
+            g = torch.sigmoid(self.w_gate(h)).view(B, L, G, self.dh)
+            k = k * g
+            v = v * g
+        if self.use_sel:
+            sel = torch.sigmoid(self.sel_B(self.sel_A(h))).view(B, L, G, self.dh)
+            rate = rate * torch.exp(self.sel_scale.view(1, 1, G, self.dh) * (sel - 0.5))
         return DELTA_FN(k, v, rate, eta, q, s0)
 
     def _apply_raw(self, x, itmult, s0=None):
@@ -263,9 +278,10 @@ class DeltaLoopLM(nn.Module):
         h = self.post(h, s0=s0s[4])
         return self.head(self.ln_f(h))
 
-    def capture_states(self, ids, boundary_idx=None):
+    def capture_states(self, ids, boundary_idx=None, s0_list=None):
         """无梯度前向, 返回 5 站末状态 [(B,G,DH,DH)] (接力接口).
-        boundary_idx 给定时额外返回边界状态列表 [(B,n_b,G,DH,DH)]."""
+        boundary_idx 给定时额外返回边界状态列表 [(B,n_b,G,DH,DH)].
+        s0_list: 5 站初始状态 (链式接力 capture 用, 支持分段低成本链)."""
         stations = (self.pre, self.loop_a.attn, self.bridge, self.loop_c.attn, self.post)
         was = [blk.attn.capture for blk in stations]
         for blk in stations:
@@ -275,7 +291,7 @@ class DeltaLoopLM(nn.Module):
             blk.attn._last_states_b = None
         self.eval()
         with torch.no_grad():
-            self.forward(ids)
+            self.forward(ids, s0_list=s0_list)
         ends = [blk.attn._last_state for blk in stations]
         for blk, w in zip(stations, was):
             blk.attn.capture = w
