@@ -139,18 +139,19 @@ def main():
     VAL.extend(s for s in seqs[int(0.95 * len(seqs)):][:2000] if len(s) >= 256)
 
     net = M.DeltaLoopLM()
+    model = (V2Model(net) if args.arch == "v2" else V3Model(net)).to(DEV).eval()
     sd = torch.load(args.ckpt, map_location="cpu", weights_only=True)
-    missing, unexpected = net.load_state_dict(sd, strict=False)
+    missing, unexpected = model.load_state_dict(sd, strict=False)   # 包装级加载: net.+ms. 前缀匹配
     print("加载 %s: missing %d | unexpected %d" % (args.arch, len(missing), len(unexpected)), flush=True)
     gate = args.arch == "v3"
     for blk in (net.pre, net.loop_a.attn, net.bridge, net.loop_c.attn, net.post):
         blk.attn.use_gate = gate
         blk.attn.use_sel = False
-    net = net.to(DEV).eval()
-    model = (V2Model(net) if args.arch == "v2" else V3Model(net)).to(DEV).eval()
+    net.eval()
+    model.eval()
 
     for L in [int(s) for s in args.lens.split(",")]:
-        n = max(2, min(8, (len(VAL) * 250) // L))
+        n = 1 if L >= 32768 else max(2, min(8, (len(VAL) * 250) // L))
         ids = torch.stack(build_block(n, L, rng)).to(DEV)
         SUFF = min(2048, L // 2)
         tgt = ids[:, L - SUFF + 1:L]

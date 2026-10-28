@@ -17,7 +17,7 @@ from v36_multistate import DeltaLoopLM_MS, build_ms_from_v31, log
 DEV = "cuda"
 LONG = 16384
 CHUNK = 128
-STEPS = 600
+STEPS = 3000
 LR = 3e-5
 BS = 1
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -66,6 +66,20 @@ def main():
     model = DeltaLoopLM_MS(net).to(DEV)
     model.train()
 
+    RESUME = os.path.join(HERE, "v36ms_e4.pth")
+    start = 0
+    if os.path.exists(RESUME):
+        model.load_state_dict(torch.load(RESUME, map_location="cpu", weights_only=True))
+        start = 600
+        log("E4 续跑: 从 %d 步 checkpoint 恢复 → 目标 %d 步" % (start, STEPS))
+    freeze_until = 1500
+    if start < freeze_until:
+        for p in model.net.parameters():
+            p.requires_grad = False
+    opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad],
+                            lr=LR * 5 if start < freeze_until else LR,
+                            weight_decay=0.01, betas=(0.9, 0.95), fused=True)
+
     ids_eval = torch.stack(build_blocks(val, 4, LONG, rng_data)).to(DEV)
     tgt = ids_eval[:, LONG - 2047:LONG]
 
@@ -93,29 +107,30 @@ def main():
         p.requires_grad = False
     rng = random.Random(42)
     t0 = time.time()
-    freeze_until = STEPS // 4
-    for stp in range(STEPS):
+    freeze_until = 1500
+    unfrozen = start >= freeze_until
+    for stp in range(start, STEPS):
         x = torch.stack(build_blocks(train, BS, LONG, rng)).to(DEV)
-        y = x.clone()
         opt.zero_grad(set_to_none=True)
         ramp = min(1.0, (stp + 1) / 300)
         with torch.autocast("cuda", dtype=torch.bfloat16):
             lo = model(x, chunk=CHUNK, ramp=ramp)
         loss = F.cross_entropy(lo.float()[:, :-1].reshape(-1, V := 23005),
-                               y[:, 1:].reshape(-1), ignore_index=0)
+                               x[:, 1:].reshape(-1), ignore_index=0)
         if not torch.isfinite(loss) or not loss.requires_grad:
             opt.zero_grad(set_to_none=True)
             continue
         loss.backward()
         torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad], 1.0)
         opt.step()
-        if stp == freeze_until:
+        if (not unfrozen) and stp >= freeze_until:
             for p in trunk:
                 p.requires_grad = True
             opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=0.01,
                                     betas=(0.9, 0.95), fused=True)
+            unfrozen = True
             log("  [课程] 主干解冻", flush=True)
-        if stp % 25 == 0 or stp == STEPS - 1:
+        if stp % 250 == 0 or stp == STEPS - 1:
             model.eval()
             try:
                 torch.cuda.synchronize()
@@ -128,7 +143,7 @@ def main():
             except Exception as e:
                 model.train()
                 log("  [探针失败跳过] %r" % (e,), flush=True)
-        if stp in (299, 449, STEPS - 1):
+        if stp in (999, 1499, 1999, 2499, 2999) or stp == STEPS - 1:
             torch.save(model.state_dict(), os.path.join(HERE, "v36ms_e4.pth"))
             log("  [存档] v36ms_e4.pth @%d" % stp, flush=True)
 
