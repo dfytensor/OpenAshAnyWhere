@@ -120,7 +120,9 @@ class DeltaAttn(nn.Module):
         nn.init.zeros_(self.dwconv.weight)
         self.rho_p = nn.Parameter(torch.full((KV_H, SLOTS, self.dh), math.log(0.8 / 0.2)))
         self.capture = False
+        self.capture_bounds = None
         self._last_state = None
+        self._last_states_b = None
 
     def _scan_core(self, x, itmult, s0=None):
         if self.capture:
@@ -137,7 +139,13 @@ class DeltaAttn(nn.Module):
             vv = (vf + vc).transpose(1, 2).reshape(B, L, G, self.dh)
             rr = _F.softplus(self.w_rate(hh)).view(B, L, G, self.dh) * itmult
             ee = torch.sigmoid(self.w_eta(hh)).view(B, L, G, self.dh)
-            yv, self._last_state = _dt.delta_scan_states(kk, vv, rr, ee, qq, KV_H, SLOTS, H // KV_H, s0=s0)
+            bnd = getattr(self, "capture_bounds", None)
+            if bnd is not None:
+                yv, sb = _dt.delta_scan_states(kk, vv, rr, ee, qq, KV_H, SLOTS, H // KV_H, s0=s0, boundary_idx=bnd)
+                self._last_states_b = sb                  # (B,n_b,G,DH,DH)
+                self._last_state = sb[:, -1]
+            else:
+                yv, self._last_state = _dt.delta_scan_states(kk, vv, rr, ee, qq, KV_H, SLOTS, H // KV_H, s0=s0)
             return yv.view(B, L, KV_H, SLOTS, H // KV_H, DH).sum(3).reshape(B, L, H * DH)
         B, L, _ = x.shape
         G = self.KV * self.S
@@ -246,19 +254,26 @@ class DeltaLoopLM(nn.Module):
         h = self.post(h, s0=s0s[4])
         return self.head(self.ln_f(h))
 
-    def capture_states(self, ids):
-        """无梯度前向, 返回 5 站末状态 [(B,G,DH,DH)] (接力接口)."""
-        was = [blk.attn.capture for blk in (self.pre, self.loop_a.attn, self.bridge, self.loop_c.attn, self.post)]
-        for blk in (self.pre, self.loop_a.attn, self.bridge, self.loop_c.attn, self.post):
+    def capture_states(self, ids, boundary_idx=None):
+        """无梯度前向, 返回 5 站末状态 [(B,G,DH,DH)] (接力接口).
+        boundary_idx 给定时额外返回边界状态列表 [(B,n_b,G,DH,DH)]."""
+        stations = (self.pre, self.loop_a.attn, self.bridge, self.loop_c.attn, self.post)
+        was = [blk.attn.capture for blk in stations]
+        for blk in stations:
             blk.attn.capture = True
             blk.attn._last_state = None
+            blk.attn.capture_bounds = boundary_idx
+            blk.attn._last_states_b = None
         self.eval()
         with torch.no_grad():
             self.forward(ids)
-        states = [blk.attn._last_state for blk in (self.pre, self.loop_a.attn, self.bridge, self.loop_c.attn, self.post)]
-        for blk, w in zip((self.pre, self.loop_a.attn, self.bridge, self.loop_c.attn, self.post), was):
+        ends = [blk.attn._last_state for blk in stations]
+        for blk, w in zip(stations, was):
             blk.attn.capture = w
-        return states
+            blk.attn.capture_bounds = None
+        if boundary_idx is None:
+            return ends
+        return ends, [blk.attn._last_states_b for blk in stations]
 
 
 def main():
