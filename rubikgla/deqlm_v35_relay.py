@@ -119,6 +119,9 @@ class DeltaAttn(nn.Module):
                                 groups=KV_H * SLOTS * self.dh, bias=False)
         nn.init.zeros_(self.dwconv.weight)
         self.rho_p = nn.Parameter(torch.full((KV_H, SLOTS, self.dh), math.log(0.8 / 0.2)))
+        self.w_gate = nn.Linear(D, KV_H * SLOTS * self.dh, bias=True)   # v36 写入门
+        nn.init.zeros_(self.w_gate.weight)
+        nn.init.constant_(self.w_gate.bias, 3.0)            # sigmoid≈0.95 近直通起步
         self.capture = False
         self.capture_bounds = None
         self._last_state = None
@@ -139,6 +142,9 @@ class DeltaAttn(nn.Module):
             vv = (vf + vc).transpose(1, 2).reshape(B, L, G, self.dh)
             rr = _F.softplus(self.w_rate(hh)).view(B, L, G, self.dh) * itmult
             ee = torch.sigmoid(self.w_eta(hh)).view(B, L, G, self.dh)
+            gg = torch.sigmoid(self.w_gate(hh)).view(B, L, G, self.dh)   # v36 写入门
+            kk = kk * gg
+            vv = vv * gg
             bnd = getattr(self, "capture_bounds", None)
             if bnd is not None:
                 yv, sb = _dt.delta_scan_states(kk, vv, rr, ee, qq, KV_H, SLOTS, H // KV_H, s0=s0, boundary_idx=bnd)
@@ -159,6 +165,9 @@ class DeltaAttn(nn.Module):
         rate = F.softplus(self.w_rate(h)).view(B, L, G, self.dh)
         rate = rate * itmult                                   # v31s: 恒乘法 (it=0 时 mult≡1, 精确等价)
         eta = torch.sigmoid(self.w_eta(h)).view(B, L, G, self.dh)
+        g = torch.sigmoid(self.w_gate(h)).view(B, L, G, self.dh)   # v36 写入门
+        k = k * g
+        v = v * g
         return DELTA_FN(k, v, rate, eta, q, s0)
 
     def _apply_raw(self, x, itmult, s0=None):
