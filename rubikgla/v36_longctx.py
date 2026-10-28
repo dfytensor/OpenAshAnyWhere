@@ -59,7 +59,7 @@ def main():
     log("4096后缀 NLL [finetune前]: 零state %.4f | relay-s0 %.4f | v36-MS %.4f"
         % (suffix(lo_zero, 0), suffix(lo_relay, 0), suffix(lo_ms, 2048)))
 
-    finetune(model, train, STEPS, BS, LR, CHUNK, save_path=ckpt_path)
+    finetune(model, train, STEPS, BS, LR, CHUNK, save_path=ckpt_path, curriculum=True)
     torch.save(model.state_dict(), ckpt_path)
 
     model.eval()

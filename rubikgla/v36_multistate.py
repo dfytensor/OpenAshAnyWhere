@@ -26,7 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CKPT = os.path.join(HERE, "deqlmv31r_pt_full.pth")
 
 
-def log(msg):
+def log(msg, **kw):
     print(msg, flush=True)
 
 
@@ -44,7 +44,8 @@ class StationReadout(nn.Module):
         nn.init.normal_(self.down.weight, std=0.002)   # 小而非零: 起始≈0, 梯度可达上游
 
     def forward(self, h, Sst, chunk):
-        """h (B,L,D) → (B,L,D); Sst (B,K,G,DH,DH) detached."""
+        """h (B,L,D) → (B,L,D); Sst (B,K,G,DH,DH) detached.
+        按 K 循环累加: 避免大中间张量 (16k+ 上一次 einsum 物化 >2s 触发 Windows TDR)."""
         B, L, _ = h.shape
         K = Sst.shape[1]
         cidx = (torch.arange(L, device=h.device) // chunk).clamp(max=K - 1)
@@ -54,8 +55,30 @@ class StationReadout(nn.Module):
         mask = torch.arange(K, device=h.device).view(1, 1, K) >= cidx.view(1, L, 1)
         w = torch.softmax(scores.masked_fill(mask, -1e9), dim=-1)
         w = w * (cidx > 0).float().view(1, L, 1)       # chunk0 无历史
-        y = torch.einsum("blk,blgd,bkgdt->blgt", w, q, Sst.float())
+        y = torch.zeros(B, L, G, DH, device=h.device, dtype=torch.float32)
+        for k in range(K):
+            y = y + w[:, :, k].unsqueeze(-1).unsqueeze(-1) * torch.einsum(
+                "blgd,bgdt->blgt", q, Sst[:, k].float())
         return self.down(y.reshape(B, L, G * DH).to(h.dtype))
+
+
+def capture_segmented(net, ids, chunk, max_seg=2048):
+    """分段 capture + s0 链: 单内核 ≤2048 步, 避开 Windows TDR (16k+ 必需)."""
+    L = ids.shape[1]
+    bounds_all = list(range(chunk - 1, L, chunk))
+    banks = [[] for _ in range(STATIONS)]
+    cur = None
+    i = 0
+    while i < L:
+        j = min(i + max_seg, L)
+        seg = ids[:, i:j]
+        bnd = [b - i for b in bounds_all if i <= b < j]
+        ends, bs = net.capture_states(seg, boundary_idx=bnd, s0_list=cur)
+        for k in range(STATIONS):
+            banks[k].append(bs[k])
+        cur = ends
+        i = j
+    return [torch.cat(b, dim=1) for b in banks]
 
 
 class DeltaLoopLM_MS(nn.Module):
@@ -67,10 +90,8 @@ class DeltaLoopLM_MS(nn.Module):
         self.ms = nn.ModuleList([StationReadout() for _ in range(STATIONS)])
 
     def forward(self, ids, chunk=CHUNK, ramp=1.0):
-        bounds = list(range(chunk - 1, ids.shape[1], chunk))
         was_training = self.net.training
-        with torch.no_grad():                           # bank (detached)
-            _, banks = self.net.capture_states(ids, boundary_idx=bounds)
+        banks = capture_segmented(self.net, ids, chunk)          # 分段 capture (TDR 安全)
         if was_training:
             self.net.train()                            # 修复: capture 内部 eval() 必须恢复
         banks = [b.detach() for b in banks]
@@ -85,11 +106,14 @@ class DeltaLoopLM_MS(nn.Module):
         return self.net.head(self.net.ln_f(h))
 
 
-def build_ms_from_v31():
+def build_ms_from_v31(enable_gate=True, enable_sel=True):
     net = M.DeltaLoopLM()
     sd = torch.load(CKPT, map_location="cpu", weights_only=True)
     missing, unexpected = net.load_state_dict(sd, strict=False)
-    log("v31 加载: missing %d tensors (gate/ms 预期) | unexpected %d" % (len(missing), len(unexpected)))
+    log("v31 加载: missing %d tensors (gate/sel 预期) | unexpected %d" % (len(missing), len(unexpected)))
+    for blk in (net.pre, net.loop_a.attn, net.bridge, net.loop_c.attn, net.post):
+        blk.attn.use_gate = enable_gate
+        blk.attn.use_sel = enable_sel
     return net.to(DEV).eval()
 
 
@@ -101,25 +125,40 @@ def nll_at(model, ids, **kw):
                            ids[:, 1:].reshape(-1), ignore_index=0).item()
 
 
-def finetune(model, train, steps, bs, lr, chunk, log_every=100, save_path=None):
-    """crash-hardened: 每 log 周期先存档再探针; 探针失败 sync+重试一次."""
-    opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad],
-                            lr=lr, weight_decay=0.01, betas=(0.9, 0.95), fused=True)
+def finetune(model, train, steps, bs, lr, chunk, log_every=100, save_path=None, curriculum=False):
+    """crash-hardened: 探针前先存档, 探针失败 sync+重试.
+    curriculum: 阶段1 (前1/4) 冻结主干只训 5 读头 (lr×5) → 阶段2 全参解冻."""
+    def make_opt(params, lrv):
+        return torch.optim.AdamW(params, lr=lrv, weight_decay=0.01, betas=(0.9, 0.95), fused=True)
+    trunk = list(model.net.parameters())
+    heads = list(model.ms.parameters())
+    freeze_until = steps // 4 if curriculum else 0
+    if curriculum:
+        for p in trunk:
+            p.requires_grad = False
+        opt = make_opt(heads, lr * 5)
+    else:
+        opt = make_opt([p for p in model.parameters() if p.requires_grad], lr)
     rng = random.Random(42)
     t0 = time.time()
     for stp in range(steps):
         x, y = get_batch(train, bs=bs, device=DEV, rng=rng)
         opt.zero_grad(set_to_none=True)
-        ramp = min(1.0, stp / 300)
+        ramp = min(1.0, (stp + 1) / 300)            # 暖启动: 永不为 0 (冻结期也保梯度路径)
         with torch.autocast("cuda", dtype=torch.bfloat16):
             lo = model(x, chunk=chunk, ramp=ramp)
         loss = F.cross_entropy(lo.float().reshape(-1, V), y.reshape(-1), ignore_index=0)
-        if not torch.isfinite(loss):
+        if not torch.isfinite(loss) or not loss.requires_grad:
             opt.zero_grad(set_to_none=True)
             continue
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
+        if curriculum and stp == freeze_until:
+            for p in trunk:
+                p.requires_grad = True
+            opt = make_opt(model.parameters(), lr)
+            log("  [课程] 主干解冻, 全参联合 (lr %.1e)" % lr, flush=True)
         if stp % log_every == 0 or stp == steps - 1:
             if save_path:
                 torch.save(model.state_dict(), save_path)   # 探针前先存档 (崩溃不丢)
