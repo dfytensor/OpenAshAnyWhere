@@ -19,12 +19,12 @@ STATIONS = 5
 VAL = []
 
 
-def capture_segmented(net, ids, chunk, max_seg=2048):
-    """分段 capture + s0 链: 单内核 ≤2048 步, 避开 Windows TDR."""
+def capture_segmented(net, ids, chunk, max_seg=2048, s0_list=None):
+    """分段 capture + s0 链: 单内核 ≤2048 步, 避开 Windows TDR. 返回 (banks, ends)."""
     L = ids.shape[1]
     bounds_all = list(range(chunk - 1, L, chunk))
     banks = [[] for _ in range(STATIONS)]
-    cur = None
+    cur = s0_list
     i = 0
     while i < L:
         j = min(i + max_seg, L)
@@ -35,7 +35,7 @@ def capture_segmented(net, ids, chunk, max_seg=2048):
             banks[k].append(bs[k])
         cur = ends
         i = j
-    return [torch.cat(b, dim=1) for b in banks]
+    return [torch.cat(b, dim=1) for b in banks], cur
 
 
 class MSReadoutV2(nn.Module):
@@ -74,16 +74,20 @@ class V2Model(nn.Module):
         self.net = net
         self.ms = MSReadoutV2()
 
-    def forward(self, ids, chunk=128, ramp=1.0):
+    def forward(self, ids, chunk=128, ramp=1.0, banks_override=None, s0_list=None):
         was_training = self.net.training
-        banks = capture_segmented(self.net, ids, chunk)
+        if banks_override is None:
+            banks = capture_segmented(self.net, ids, chunk)[0]
+        else:
+            banks = banks_override
         if was_training:
             self.net.train()
         banks = [b.detach() for b in banks]
         with torch.autocast("cuda", dtype=torch.bfloat16):
             hh = self.net.emb(ids)
-            for st in (self.net.pre, self.net.loop_a, self.net.bridge, self.net.loop_c, self.net.post):
-                hh = st(hh)
+            s0s = s0_list if s0_list is not None else [None] * 5
+            for j, st in enumerate((self.net.pre, self.net.loop_a, self.net.bridge, self.net.loop_c, self.net.post)):
+                hh = st(hh, s0=s0s[j])
         h = hh.float()
         if ramp != 0.0:
             h = h + ramp * self.ms(h, banks, chunk)
@@ -99,17 +103,26 @@ class V3Model(nn.Module):
         from v36_multistate import StationReadout
         self.ms = nn.ModuleList([StationReadout() for _ in range(STATIONS)])
 
-    def forward(self, ids, chunk=128, ramp=1.0):
+    def forward(self, ids, chunk=128, ramp=1.0, banks_override=None, s0_list=None):
+        if banks_override is not None:
+            print("  [dbg] banks_override 元素类型 %s | [0][0] 类型 %s | j0 shape %s"
+                  % (type(banks_override), type(banks_override[0]),
+                     tuple(banks_override[0][0].shape) if torch.is_tensor(banks_override[0][0]) else "LIST"),
+                  flush=True)
         was_training = self.net.training
-        banks = capture_segmented(self.net, ids, chunk)
+        if banks_override is None:
+            banks = capture_segmented(self.net, ids, chunk, s0_list=s0_list)[0]
+        else:
+            banks = banks_override
         if was_training:
             self.net.train()
         banks = [b.detach() for b in banks]
         with torch.autocast("cuda", dtype=torch.bfloat16):
             hh = self.net.emb(ids)
+            s0s = s0_list if s0_list is not None else [None] * 5
             for j, st in enumerate((self.net.pre, self.net.loop_a,
                                     self.net.bridge, self.net.loop_c, self.net.post)):
-                hh = st(hh)
+                hh = st(hh, s0=s0s[j])
                 if ramp != 0.0:
                     hh = hh + ramp * self.ms[j](hh, banks[j], chunk)
         return self.net.head(self.net.ln_f(hh.float()))
@@ -170,7 +183,23 @@ def main():
                 cur_states = net.capture_states(seg, s0_list=cur_states)   # 廉价s0接力
                 if i == n_seg - 1:
                     lo_last = net(seg, s0_list=cur_states)
-            lo_ms = model(ids, chunk=min(128, L // 4), ramp=1.0)
+            if L >= 32768:
+                # 分段 v36 推理: 逐 2048 段 s0 链 + 全量 bank 注入 (65536 单内核避开 TDR)
+                banks = [[] for _ in range(5)]
+                cur = None
+                parts = []
+                for i in range(L // 2048):
+                    seg = ids[:, i * 2048:(i + 1) * 2048]
+                    banks_seg, ends = capture_segmented(net, seg, 128, s0_list=cur)
+                    for j in range(5):
+                        banks[j].append(banks_seg[j])
+                    cur = ends
+                    parts.append(model(seg, chunk=128, ramp=1.0,
+                                       banks_override=[torch.cat(banks[j], dim=1) for j in range(5)],
+                                       s0_list=cur))
+                lo_ms = torch.cat(parts, dim=1)
+            else:
+                lo_ms = model(ids, chunk=min(128, L // 4), ramp=1.0)
         print("L=%6d 后缀NLL: 零state %.4f | relay-s0链 %.4f | v36-MS %.4f"
               % (L, suffix(lo_zero, 0), suffix(lo_last, 0), suffix(lo_ms, L - SUFF)), flush=True)
     print("EVAL DONE", flush=True)
