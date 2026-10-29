@@ -62,12 +62,12 @@ class StationReadout(nn.Module):
         return self.down(y.reshape(B, L, G * DH).to(h.dtype))
 
 
-def capture_segmented(net, ids, chunk, max_seg=2048):
+def capture_segmented(net, ids, chunk, max_seg=2048, s0_list=None):
     """分段 capture + s0 链: 单内核 ≤2048 步, 避开 Windows TDR (16k+ 必需)."""
     L = ids.shape[1]
     bounds_all = list(range(chunk - 1, L, chunk))
     banks = [[] for _ in range(STATIONS)]
-    cur = None
+    cur = s0_list
     i = 0
     while i < L:
         j = min(i + max_seg, L)
@@ -89,9 +89,10 @@ class DeltaLoopLM_MS(nn.Module):
         self.net = net
         self.ms = nn.ModuleList([StationReadout() for _ in range(STATIONS)])
 
-    def forward(self, ids, chunk=CHUNK, ramp=1.0):
+    def forward(self, ids, chunk=CHUNK, ramp=1.0, s0_list=None):
         was_training = self.net.training
-        banks = capture_segmented(self.net, ids, chunk)          # 分段 capture (TDR 安全)
+        s0s = s0_list if s0_list is not None else [None] * STATIONS
+        banks = capture_segmented(self.net, ids, chunk, s0_list=s0s)  # 分段 capture (TDR 安全)
         if was_training:
             self.net.train()                            # 修复: capture 内部 eval() 必须恢复
         banks = [b.detach() for b in banks]
@@ -99,11 +100,20 @@ class DeltaLoopLM_MS(nn.Module):
             hh = self.net.emb(ids)
             for j, st in enumerate((self.net.pre, self.net.loop_a,
                                     self.net.bridge, self.net.loop_c, self.net.post)):
-                hh = st(hh)                             # 站 j (v31 精确)
+                hh = st(hh, s0=s0s[j])                  # 站 j (v31 精确, 支持接力 s0)
                 if ramp != 0.0:
                     hh = hh + ramp * self.ms[j](hh, banks[j], chunk)   # CED 式中途注入
         h = hh.float()
         return self.net.head(self.net.ln_f(h))
+
+    def capture_states(self, ids, boundary_idx=None, s0_list=None):
+        """委托 net.capture_states (轮换/接力接口)."""
+        was_training = self.net.training
+        with torch.no_grad():
+            out = self.net.capture_states(ids, boundary_idx=boundary_idx, s0_list=s0_list)
+        if was_training:
+            self.net.train()
+        return out
 
 
 def build_ms_from_v31(enable_gate=True, enable_sel=True):
