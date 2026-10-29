@@ -19,7 +19,7 @@ LONG = 65536
 SEG = 8192
 N_SEG = LONG // SEG
 CHUNK = 128
-STEPS = 1000
+STEPS = 2500
 LR = 2e-5
 HERE = os.path.dirname(os.path.abspath(__file__))
 RESUME = os.path.join(HERE, "v36ms_e4.pth")
@@ -47,7 +47,7 @@ def main():
     net = build_ms_from_v31(enable_gate=True, enable_sel=True)
     model = DeltaLoopLM_MS(net).to(DEV)
     RESUME64 = os.path.join(HERE, "v36ms_e464.pth")
-    start = 300
+    start = 1000
     if os.path.exists(RESUME64):
         model.load_state_dict(torch.load(RESUME64, map_location="cpu", weights_only=True), strict=False)
         log("E4-64k 续跑: 从 %d 步 checkpoint 恢复 → 目标 %d 步 (sel_scale 保持训练值)" % (start, STEPS))
@@ -109,7 +109,7 @@ def main():
             except Exception as e:
                 model.train()
                 log("  [探针失败跳过] %r" % (e,), flush=True)
-        if stp in (499, 699, 999) or stp == STEPS - 1:
+        if stp in (1499, 1999, 2499) or stp == STEPS - 1:
             torch.save(model.state_dict(), os.path.join(HERE, "v36ms_e464.pth"))
             log("  [存档] v36ms_e464.pth @%d" % stp, flush=True)
 

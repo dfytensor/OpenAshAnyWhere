@@ -91,7 +91,7 @@ def main():
         ta = (time.time() - t0) / reps
 
         # (b/c) 换入粒度扫描: 每 SWAP_EVERY token 换入一次, 测摊销开销
-        for SWAP in (128, 1024, 4096):
+        for SWAP in (1024, 4096):
             # 预热
             for w0 in range(0, min(CH, SWAP)):
                 _ = fwd(x[:, w0:w0 + 1])
@@ -127,8 +127,20 @@ def main():
             torch.cuda.synchronize()
             tc = (time.time() - t0) / reps
 
-            print("chunk=%6d swap_every=%5d | (a)常驻 %7.1fms | (b)异步 %9.1fms (开销 %8.1f%%) | (c)同步 %9.1fms (慢 %6.1f×)"
-                  % (CH, SWAP, ta * 1e3, tb * 1e3, (tb / ta - 1) * 100, tc * 1e3, tc / ta), flush=True)
+            # (b2) LRU 热专家: 安装一次后零拷贝 (热集合不变 → 轮换成本 ≈ 0)
+            for i in active:
+                for k, v in cpu_master[i].items():
+                    work[i][k].copy_(v, non_blocking=False)
+            torch.cuda.synchronize()
+            t0 = time.time()
+            for _ in range(reps):
+                for w0 in range(0, CH, 1024):
+                    _ = fwd(x[:, w0:w0 + 1024])
+            torch.cuda.synchronize()
+            tb2 = (time.time() - t0) / reps
+
+            print("chunk=%6d swap_every=%5d | (a)常驻 %7.1fms | (b)异步 %9.1fms (开销 %8.1f%%) | (c)同步 %9.1fms (慢 %6.1f×) | (b2)LRU热 %7.1fms (%5.1f%%)"
+                  % (CH, SWAP, ta * 1e3, tb * 1e3, (tb / ta - 1) * 100, tc * 1e3, tc / ta, tb2 * 1e3, (tb2 / ta - 1) * 100), flush=True)
     print("E3-REAL DONE (预期: chunk 越大, (b) 越接近 (a); (c) 恒慢)", flush=True)
 
 

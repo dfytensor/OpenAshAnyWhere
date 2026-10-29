@@ -183,25 +183,32 @@ def main():
                 cur_states = net.capture_states(seg, s0_list=cur_states)   # 廉价s0接力
                 if i == n_seg - 1:
                     lo_last = net(seg, s0_list=cur_states)
+            r0_nll = float("nan")
             if L >= 32768:
-                # 分段 v36 推理: 逐 2048 段 s0 链 + 全量 bank 注入 (65536 单内核避开 TDR)
+                # 分段 v36 推理: 逐 2048 段 s0 链 + 全量 bank 注入; 只保留末段 logits
+                # (避免 32 段 logits ≈3GB cat — 64k 三连崩的异步故障面)
                 banks = [[] for _ in range(5)]
                 cur = None
-                parts = []
+                lo_ms = None
                 for i in range(L // 2048):
                     seg = ids[:, i * 2048:(i + 1) * 2048]
                     banks_seg, ends = capture_segmented(net, seg, 128, s0_list=cur)
                     for j in range(5):
                         banks[j].append(banks_seg[j])
                     cur = ends
-                    parts.append(model(seg, chunk=128, ramp=1.0,
-                                       banks_override=[torch.cat(banks[j], dim=1) for j in range(5)],
-                                       s0_list=cur))
-                lo_ms = torch.cat(parts, dim=1)
+                    last = (i == L // 2048 - 1)
+                    ov = [torch.cat(banks[j], dim=1) for j in range(5)]
+                    lo_seg = model(seg, chunk=128, ramp=1.0, banks_override=ov, s0_list=cur)
+                    if last:
+                        lo_ms = lo_seg
+                        lo_r0 = model(seg, chunk=128, ramp=0.0, banks_override=ov, s0_list=cur)
+                v36_nll = suffix(lo_ms, 0)
+                r0_nll = suffix(lo_r0, 0)
             else:
                 lo_ms = model(ids, chunk=min(128, L // 4), ramp=1.0)
-        print("L=%6d 后缀NLL: 零state %.4f | relay-s0链 %.4f | v36-MS %.4f"
-              % (L, suffix(lo_zero, 0), suffix(lo_last, 0), suffix(lo_ms, L - SUFF)), flush=True)
+                v36_nll = suffix(lo_ms, L - SUFF)
+        print("L=%6d 后缀NLL: 零state %.4f | relay-s0链 %.4f | v36-MS %.4f | v36-ramp0(主干) %.4f"
+              % (L, suffix(lo_zero, 0), suffix(lo_last, 0), v36_nll, r0_nll), flush=True)
     print("EVAL DONE", flush=True)
 
 

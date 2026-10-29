@@ -16,8 +16,8 @@ from v36_multistate import DeltaLoopLM_MS, build_ms_from_v31, log
 DEV = "cuda"
 LONG = 16384
 CHUNK = 128
-STEPS = 300
-LR = 2e-5
+STEPS = 3000
+LR = 1e-4
 N_PAIR, N_Q = 16, 16
 N_KEY = 64
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -56,9 +56,12 @@ def main():
     net = build_ms_from_v31(enable_gate=True, enable_sel=True)
     model = DeltaLoopLM_MS(net).to(DEV)
     model.load_state_dict(torch.load(RESUME, map_location="cpu", weights_only=True), strict=False)
-    with torch.no_grad():                                  # 选择性唤醒: 非零起步
-        for blk in (net.pre, net.loop_a.attn, net.bridge, net.loop_c.attn, net.post):
-            blk.attn.sel_scale.fill_(0.5)
+    with torch.no_grad():                                  # 选择性唤醒: 双侧非零 (单侧=互锁死锁)
+        for blk in (net.pre.attn, net.loop_a.attn.attn, net.bridge.attn,
+                    net.loop_c.attn.attn, net.post.attn):
+            blk.sel_scale.fill_(0.5)                       # 恒等性暂时破坏, 换取梯度通路
+            blk.sel_A.weight.normal_(0, 0.01)
+            blk.sel_B.weight.normal_(0, 0.01)
     model.train()
     log("selwake: sel_scale→0.5 起步 (检索密集数据)")
 
@@ -101,7 +104,7 @@ def main():
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
-        if stp % 25 == 0 or stp == STEPS - 1:
+        if stp % 100 == 0 or stp == STEPS - 1:
             acc, qnll = recall_eval()
             sc = [blk.sel_scale.detach().abs().mean().item()
                   for blk in (net.pre.attn, net.loop_a.attn.attn, net.bridge.attn,
