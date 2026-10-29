@@ -58,7 +58,8 @@ def main():
     stage = [{k: torch.empty_like(v, device=DEV) for k, v in cpu_master[i].items()}
              for i in range(N_EXP)]
     copy_stream = torch.cuda.Stream()
-    active = list(range(N_EXP))
+    TOPK = 2                                            # 每窗换入/计算的专家子集 (DeepSeek 6+1 的微缩)
+    active = list(range(TOPK))                          # 只换入+计算 top-k 子集: 拷贝量 ÷ (N_EXP/TOPK)
 
     def fwd(x):
         h = moe.ln(x)
