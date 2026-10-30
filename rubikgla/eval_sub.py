@@ -104,11 +104,6 @@ class V3Model(nn.Module):
         self.ms = nn.ModuleList([StationReadout() for _ in range(STATIONS)])
 
     def forward(self, ids, chunk=128, ramp=1.0, banks_override=None, s0_list=None):
-        if banks_override is not None:
-            print("  [dbg] banks_override 元素类型 %s | [0][0] 类型 %s | j0 shape %s"
-                  % (type(banks_override), type(banks_override[0]),
-                     tuple(banks_override[0][0].shape) if torch.is_tensor(banks_override[0][0]) else "LIST"),
-                  flush=True)
         was_training = self.net.training
         if banks_override is None:
             banks = capture_segmented(self.net, ids, chunk, s0_list=s0_list)[0]
@@ -124,7 +119,7 @@ class V3Model(nn.Module):
                                     self.net.bridge, self.net.loop_c, self.net.post)):
                 hh = st(hh, s0=s0s[j])
                 if ramp != 0.0:
-                    hh = hh + ramp * self.ms[j](hh, banks[j], chunk)
+                    hh = hh + ramp * self.ms[j](hh, banks[j], None, chunk)
         return self.net.head(self.net.ln_f(hh.float()))
 
 

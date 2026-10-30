@@ -34,9 +34,11 @@ def main():
     ids = torch.stack([blk4096() for _ in range(4)]).to(DEV)
 
     net = M.DeltaLoopLM()
+    from v36_multistate import DeltaLoopLM_MS
+    model = DeltaLoopLM_MS(net).to(DEV)
     sd = torch.load(a.ckpt, map_location="cpu", weights_only=True)
-    missing, unexpected = net.load_state_dict(sd, strict=False)
-    print("加载: missing %d | unexpected %d" % (len(missing), len(unexpected)), flush=True)
+    missing, unexpected = model.load_state_dict(sd, strict=False)   # 包装级加载: net.+ms. 前缀匹配
+    print("加载 %s: missing %d | unexpected %d" % (a.ckpt, len(missing), len(unexpected)), flush=True)
     for blk in (net.pre, net.loop_a.attn, net.bridge, net.loop_c.attn, net.post):
         blk.attn.use_gate = True
         blk.attn.use_sel = True
