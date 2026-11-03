@@ -1,0 +1,5 @@
+numpy>=1.26
+scipy>=1.11
+matplotlib>=3.8
+# attention-side experiments additionally need:
+# torch>=2.0  (CUDA recommended; the statistics side runs CPU-only)
