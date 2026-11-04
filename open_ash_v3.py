@@ -2,6 +2,7 @@ import time
 import math
 
 import torch
+import torch.nn.functional as F
 from torch import nn, optim
 
 try:
@@ -31,10 +32,11 @@ class MaxStateSuper(torch.nn.Module):
                  state_rank=None, use_decay=True,
                  decay_init=(0.001, 0.15), decay_v_std=0.0,
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False,
-                 kv_delta=False):
+                 kv_delta=False, kv_dim=None):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
+        self.kv_dh = kv_dim if kv_dim else self.d_head   # KV 通道头维（瘦身消融用）
         self.model_flag = model_flag
         self.use_fused = use_fused
         self.use_decay = use_decay
@@ -45,7 +47,7 @@ class MaxStateSuper(torch.nn.Module):
         #   → 检索到相似历史 token 即取回其嵌入 (归纳头行为); gate 零初始化渐进启用
         self.kv_channel = kv_channel
         if kv_channel:
-            self.q_proj = nn.Linear(dim_size, dim_size, bias=False)
+            self.q_proj = nn.Linear(dim_size, self.heads * self.kv_dh, bias=False)
             theta0 = math.log(math.expm1(-math.log(kv_decay)))
             self.kv_loga = nn.Parameter(torch.full((heads,), theta0))
             self.kv_gate = nn.Parameter(torch.tensor(0.0))
@@ -126,7 +128,7 @@ class MaxStateSuper(torch.nn.Module):
         qq = None
         if self.kv_channel:
             bx, sx = x.shape[0], x.shape[1]
-            qq = self.q_proj(x).view(bx, sx, self.heads, self.d_head).permute(0, 2, 1, 3)
+            qq = self.q_proj(x).view(bx, sx, self.heads, self.kv_dh).permute(0, 2, 1, 3)
             log_a = (-torch.nn.functional.softplus(self.kv_loga)).view(1, -1, 1).expand(bx, self.heads, sx)
         infer_mode = (not torch.is_grad_enabled()) and _fused_available(c) and self.use_fused
         if infer_mode:
@@ -148,18 +150,38 @@ class MaxStateSuper(torch.nn.Module):
                 out_l = self.gen_model(out, out1, c, out3, e)
         s_kv_new = None
         if qq is not None:
-            kk = c.permute(0, 3, 2, 1)
+            cc_perm = c.permute(0, 3, 2, 1)
+            if self.kv_dh < self.d_head:
+                cc_perm = cc_perm[..., :self.kv_dh]     # 瘦身：KV 通道用 c 流前 kv_dh 个 lane
+            kk = cc_perm
             if self.kv_norm_keys:
                 kk = kk / (kk.norm(dim=-1, keepdim=True) + 1e-6)
             if self.kv_beta is not None:
                 kk = kk * self.kv_beta.view(1, -1, 1, 1).to(kk.dtype)
-            if self.kv_delta:
-                r, s_kv_new = tops.kv_delta_scan_tbptt(qq, kk, c.permute(0, 3, 2, 1), log_a, s0=s_kv)
+            if s_kv is not None and sx == 1:
+                # 增量单步（O(1) 解码）：S ← a·S + (β·k̂)⊗(β·k̂)；r = q·S——纯 torch 小 op
+                a_step = torch.exp(log_a[..., 0])                       # (B,H)
+                s_new = a_step[..., None, None] * s_kv \
+                    + torch.einsum('bhd,bhv->bhdv',
+                                   kk.to(qq.dtype).squeeze(2), kk.to(qq.dtype).squeeze(2))
+                r = torch.einsum('bhd,bhdv->bhv', qq.to(qq.dtype).squeeze(2), s_new)
+                s_kv_new = s_new
+            elif self.kv_delta:
+                r, s_kv_new = tops.kv_delta_scan_tbptt(qq, kk, cc_perm, log_a, s0=s_kv)
             elif getattr(tops, 'TRITON_OK', False):
-                r, s_kv_new = tops.KvScanFn.apply(qq, kk, kk, log_a, s_kv)
+                r, s_kv_new = tops.KvScanFn.apply(qq, kk, cc_perm, log_a, s_kv)
             else:
-                r, s_kv_new = tops.kv_chunked_scan(qq, kk, kk, log_a, chunk=128, s0=s_kv)
-            out_l = out_l + self.kv_gate * r.permute(0, 3, 2, 1).to(out_l.dtype)
+                r, s_kv_new = tops.kv_chunked_scan(qq, kk, cc_perm, log_a, chunk=128, s0=s_kv)
+            if r.dim() == 4:
+                rp = r.permute(0, 3, 2, 1)                       # (B, kv_dh, S, H)
+                if self.kv_dh < self.d_head:
+                    rp = F.pad(rp, (0, 0, 0, 0, 0, self.d_head - self.kv_dh))
+                out_l = out_l + self.kv_gate * rp.to(out_l.dtype)
+            else:
+                rp = r.permute(0, 2, 1)                          # (B, kv_dh, H)
+                if self.kv_dh < self.d_head:
+                    rp = F.pad(rp, (0, 0, 0, self.d_head - self.kv_dh))
+                out_l = out_l + self.kv_gate * rp.unsqueeze(2).to(out_l.dtype)
 
         out = out_l.transpose(1, 2).contiguous().view(b, s, d)
 
@@ -209,13 +231,13 @@ class DecoderLayer(torch.nn.Module):
     def __init__(self, hidden_size, num_heads, voc_size, model_flag="train", use_fused=True,
                  state_rank=None, use_decay=True, pre_norm=False, ffn_act="relu",
                  decay_init=(0.001, 0.15), decay_v_std=0.0, kv_channel=False, kv_decay=0.98,
-                 kv_norm_keys=False, kv_beta=False, kv_delta=False):
+                 kv_norm_keys=False, kv_beta=False, kv_delta=False, kv_dim=None):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
                                                    decay_init, decay_v_std,
                                                    kv_channel, kv_decay,
-                                                   kv_norm_keys, kv_beta, kv_delta)
+                                                   kv_norm_keys, kv_beta, kv_delta, kv_dim)
         self.ffn = FeedForward(hidden_size, ffn_act)
         self.layer_norm = torch.nn.LayerNorm(hidden_size)
         self.pre_norm = pre_norm
@@ -284,7 +306,8 @@ class OpenASH_V3(torch.nn.Module):
     def __init__(self, voc_size, hidden_size, num_heads, num_layers, max_seq_len=8192, model_flag="train",
                  use_fused=True, state_rank=64, ce_chunk=256, use_decay=True,
                  pre_norm=False, ffn_act="relu", decay_init=(0.001, 0.15), decay_v_std=0.0,
-                 kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False, kv_delta=False):
+                 kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False, kv_delta=False,
+                 kv_dim=None):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -298,7 +321,7 @@ class OpenASH_V3(torch.nn.Module):
         self.decoder_layers = torch.nn.ModuleList(
             [DecoderLayer(hidden_size, num_heads, voc_size, model_flag, use_fused, state_rank, use_decay,
                           pre_norm, ffn_act, decay_init, decay_v_std, kv_channel, kv_decay,
-                          kv_norm_keys, kv_beta, kv_delta)
+                          kv_norm_keys, kv_beta, kv_delta, kv_dim)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.head_score = nn.Linear(hidden_size, voc_size, bias=False)
