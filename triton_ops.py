@@ -1020,3 +1020,5 @@ class KvScanFn(torch.autograd.Function):
             r, _ = kv_chunked_scan(q2, k2, v2, log_a, chunk=128, s0=s0)
             gq, gk, gv = torch.autograd.grad(r, [q2, k2, v2], gr.detach().to(r.dtype))
         return gq.to(q.dtype), gk.to(k.dtype), gv.to(v.dtype), None, None
+
+

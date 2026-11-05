@@ -98,7 +98,7 @@ python <见 test_incremental.py 模式>  # fp32 全序列 vs 逐 token：3.7e-06
 | tf 位置插值公平性（PI ×4） | tf@2048 恢复 37.68→35.20，**v3.5 仍领先 22.8%**（15.64）；优势对公平性补强稳健 |
 | 增量 O(1) 推理兑现 | state 元组携带 (e, S)；fp32 逐 token vs 全序列 diff 3.7e-06；`demo_o1_decode.py` 端到端演示（常数状态 894k 数值/12 层，生成质量连贯） |
 | KV 瘦身消融（kv_dh 96→48） | **v35s PPL 40.87 vs 完整版 41.34（3000 步）**——参数 -3.5M、KV 状态/计算减半且质量略优；48 维键空间检索更锐利。**v35s 成为新推荐配置** |
-| delta-rule 写入 | naive 版性质验证 PASS（重复键精确覆盖）；分块 GPU 版存在双向状态依赖（反向 `gq_j = Σ_v λ_j·S_j` 需 λ 反向递推与 S 正向重算同场）——精确形式需 Gated DeltaNet（arXiv 2412.06464）论文级 UT/WY 实现；已交付 naive 参考实现（性质验证 PASS）与 TBPTT 诚实评估（384 步 Python 循环 18s/step 不可训练）。大数据版 gap=128 检索已反超 tf，紧迫性下降 | ⚠️ 部分（参考实现完成，分块 GPU 版照论文实现留待后续） |
+| delta-rule 写入 | naive 版性质验证 PASS（重复键精确覆盖）；分块 GPU 版的本轮结论：已从 DeltaNet 论文附录 B（flash-linear-attention README）获得完整 WY 框架——`P = I − KᵀW`、`H = KᵀU`、`T = (I + tril(β·KKᵀ·decay, −1))⁻¹·diag(β)`、`O = Q·S₀ + (QKᵀ⊙M)(U − W·S₀)`、`W = T·K`、`U = T·V`；per-step 标量衰减经「l-归一化空间变换 S̃ = exp(−l)·S」可完全消去块内衰减（已数学验证）。实现留待专门一轮：照 FLA 源码逐行对照（chunk_delta_h.py / wy_fast.py），并以 C=2/C=3 手算逐位锚定验证 | ⚠️ 框架已获得，实现留待专门一轮（本轮凭记忆实现两次出错，已回滚未验证草稿，保留 naive 参考） |
 | KV scan 手工 Triton 反向 | 降级：重算反向（4.3 ms/层）已够快，手工推导收益 ~2 ms/层、风险高 |
 
 ### v35s 增量发现
