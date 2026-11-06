@@ -20,6 +20,16 @@ VOC, HID, HEADS, LAYERS = 23004, 768, 8, 12
 
 
 def build(arch):
+    if arch in ('m2', 'gdn', 'dn'):
+        import baseline_fla
+        return baseline_fla.FlaLMWrapper(baseline_fla.BUILDERS[arch]())
+    if arch == 'v36':
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=48, kv_backend='delta_fla')
     if arch == 'v30':
         return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=512, model_flag='train',
                           use_fused=True, use_decay=False)

@@ -121,5 +121,22 @@ KV 通道 48 维键空间相对 96 维是**质量-效率双优**（更少参数�
 ### C-Eval 结论（预期管理的验证）
 四个数据点全部落在 22.6~23.1%（随机 25% 附近），SFT 仅带来 +0.24% 的格式校准——**证实该尺度下知识型基准由数据量与参数量主导，对架构差异不敏感**。PPL（-7%）与长程探针仍是架构对比的正确判据。生成样例（`demo_sft_compare.py`）在该 SFT 规模下两模型均不成熟（闲聊主导数据、无 assistant-mask 训练），定性信息有限，已如实记录。
 
+### v3.6 delta 写入 A/B（大数据 3000 步等 token 36.9M，2026-11-07）
+
+| 模型 | 写入规则 | val PPL@384 | @2048 | 复制 gain gap=128 |
+|---|---|---|---|---|
+| v35s（对照） | sum 累积 | 28.40 | 27.75 | +0.56 |
+| **v3.6（FLA chunk_gated_delta_rule）** | **delta 精确覆盖** | **25.43** | **24.89** | **+0.62** |
+| Gated DeltaNet (FLA) | delta + 门控 | 20.99 | 19.85 | +0.33 |
+| DeltaNet (FLA) | delta 无门控 | 25.42 | — | — |
+
+结论：
+1. **delta 写入价值证实**：sum→delta 单变量替换带来 −10.5% PPL（28.40→25.43），且长度外推平坦性保持（27.5→24.9 @2048）
+2. **v3.6 检索通道达到 DeltaNet 水平**（25.43 vs 25.42），同时多出 GDN/DeltaNet 均没有的 max-scan 通道
+3. 与 Gated DeltaNet 残余差距（21.30，-16%）：其门控写入强度 β、更成熟配方为已知后续项；v3.6 的差异化卖点（长度无关 + max-scan 峰值通道）保持
+4. γ 诊断：v3.6 分层多尺度 γ 与 v35s 一致被训练保留（快层 ~4 tok / 慢层 ~243 tok）
+
+FLA 基线协议注记：GDN/DeltaNet 因显存约束用 bs16×6000 步（等 token 预算）；Mamba2 因 Windows 缺 causal-conv1d（Triton conv1d 后备官方声明未测试）排除出本轮对比。
+
 ### 交付物新增
 `prepare_sft.py`（SFT 预处理）、`train_sft.py`（SFT 训练）、`eval_ceval.py`（C-Eval 48 科目 5-shot 评测）、`demo_o1_decode.py`（O(1) 解码演示）、`demo_sft_compare.py`（SFT 生成对比）、`test_tf_pi.py`（RoPE-PI 公平性评测）。
