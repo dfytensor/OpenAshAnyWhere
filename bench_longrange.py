@@ -44,7 +44,16 @@ def load_model(key):
                        use_fused=True, use_decay=ud)
     else:
         path = os.path.join(key, 'model.pt')
-        if key.startswith('big_v36'):
+        if key.startswith('scale_v36'):
+            m = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                           use_fused=True, use_decay=True, pre_norm=True, ffn_act='silu',
+                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                           kv_dim=48, kv_backend='delta_fla')
+        elif key.startswith('scale_gdn'):
+            from baseline_fla import build_gdn, FlaLMWrapper
+            m = FlaLMWrapper(build_gdn())
+        elif key.startswith('big_v36'):
             m = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
                            use_fused=True, use_decay=True, pre_norm=True, ffn_act='silu',
                            decay_init=(0.0001, 0.35), decay_v_std=0.04,
@@ -135,7 +144,7 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['big_v35_3k', 'big_v36', 'big_gdn']
+MODEL_KEYS = ['scale_v36_15k', 'scale_gdn_30k', 'big_v35']
 models = {k: load_model(k) for k in MODEL_KEYS}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]
 results['A_len_ppl'] = {}
