@@ -35,82 +35,60 @@ results = {}
 
 
 def load_model(key):
-    """key: 'v3.0 pure' / 'v3.1 decay'（旧 ckpt）或 'ab_v30' / 'ab_v31' / 'ab_v32' / 'ab_tf'。"""
+    """按 key 构建并加载模型。支持 CKPTS 旧条目与全部 big_*/ab_*/scale_* 结果目录。"""
     import os
     torch.manual_seed(2024)
+    m = None
+    wrapper = False
     if key in CKPTS:
         path, ud = CKPTS[key]
         m = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=512, model_flag='train',
                        use_fused=True, use_decay=ud)
     else:
         path = os.path.join(key, 'model.pt')
-        if key.startswith('scale_v36'):
-            m = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
-                           use_fused=True, use_decay=True, pre_norm=True, ffn_act='silu',
-                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
-                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
-                           kv_dim=48, kv_backend='delta_fla')
-        elif key.startswith('scale_gdn'):
+        # FLA 官方基线（wrapper 保存，键带 model. 前缀）
+        if key.startswith('big_gdn') or key.startswith('scale_gdn'):
             from baseline_fla import build_gdn, FlaLMWrapper
             m = FlaLMWrapper(build_gdn())
-        elif key.startswith('big_v36'):
-            m = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
-                           use_fused=True, use_decay=True, pre_norm=True, ffn_act='silu',
-                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
-                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
-                           kv_dim=48, kv_backend='delta_fla')
-        elif key.startswith('big_tf') or key.startswith('ab_tf'):
+            wrapper = True
+        elif key.startswith('big_dn'):
+            from baseline_fla import build_deltanet, FlaLMWrapper
+            m = FlaLMWrapper(build_deltanet())
+            wrapper = True
+        elif key.startswith('big_tf') or key.startswith('ab_tf') or key.startswith('scale_tf'):
             from baseline_tf import TransformerLM
             m = TransformerLM(VOC, HID, HEADS, 11, max_seq_len=2048)
-        elif key.startswith('big_v35') or key.startswith('ab_v35') or key.startswith('ab_v34'):
-            m = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
-                           use_fused=True, use_decay=True, pre_norm=True, ffn_act='silu',
-                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
-                           kv_channel=True, kv_decay=0.98,
-                           kv_norm_keys=(not key.startswith('ab_v34')), kv_beta=(not key.startswith('ab_v34')))
-        elif key.startswith('ab_v33'):
-            m = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
-                           use_fused=True, use_decay=True, pre_norm=True, ffn_act='silu',
-                           decay_init=(0.0001, 0.35), decay_v_std=0.04)
-        elif key.startswith('ab_v35d'):
-            m = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
-                           use_fused=True, use_decay=True, pre_norm=True, ffn_act='silu',
-                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
-                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True,
-                           kv_beta=False, kv_delta=True)
-        elif key.startswith('ab_v35'):
-            m = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
-                           use_fused=True, use_decay=True, pre_norm=True, ffn_act='silu',
-                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
-                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True)
-        elif key.startswith('ab_v34'):
-            m = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
-                           use_fused=True, use_decay=True, pre_norm=True, ffn_act='silu',
-                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
-                           kv_channel=True, kv_decay=0.98)
-        elif key.startswith('big_gdn'):
-            from baseline_fla import GatedDeltaNetForCausalLM, GatedDeltaNetConfig
-            cfg = GatedDeltaNetConfig(vocab_size=23004, hidden_size=768, num_hidden_layers=5)
-            m = GatedDeltaNetForCausalLM(cfg)
-        elif key.startswith('big_dn'):
-            from baseline_fla import DeltaNetForCausalLM, DeltaNetConfig
-            cfg = DeltaNetConfig(vocab_size=23004, hidden_size=768, num_hidden_layers=9)
-            m = DeltaNetForCausalLM(cfg)
-        elif key.startswith('ab_v32'):
-            m = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
-                           use_fused=True, use_decay=True, pre_norm=True, ffn_act='silu',
-                           decay_init=(0.0001, 0.35), decay_v_std=0.04)
-        elif key.startswith('ab_v31'):
-            m = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=512, model_flag='train',
-                           use_fused=True, use_decay=True)
+            wrapper = True
+        # v3 系（OpenASH_V3）
         else:
-            raise ValueError(f'load_model: unknown key {key}')
-    from baseline_fla import FlaLMWrapper
-    if key.startswith('big_gdn') or key.startswith('big_dn'):
-        m = FlaLMWrapper(m)
-    m.load_state_dict(torch.load(path, map_location='cpu', weights_only=True))
+            ms = 2048
+            backend = 'sum'
+            beta_init = 0.0
+            if key.startswith('big_v36') or key.startswith('scale_v36') \
+                    or key.startswith('big_v36b1'):
+                backend = 'delta_fla'
+            if key.endswith('b1'):
+                beta_init = 4.0
+            m = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=ms, model_flag='train',
+                           use_fused=True, use_decay=True,
+                           pre_norm=(key not in ('ab_v30', 'ab_v31', 'ab_v32')),
+                           ffn_act='silu' if key not in ('ab_v30', 'ab_v31', 'ab_v32') else 'relu',
+                           decay_init=(0.0001, 0.35) if key not in ('ab_v30', 'ab_v31') else (0.001, 0.15),
+                           decay_v_std=0.04 if key not in ('ab_v30', 'ab_v31') else 0.0,
+                           kv_channel=(key not in ('ab_v30', 'ab_v31', 'ab_v32')),
+                           kv_decay=0.98,
+                           kv_norm_keys=(key not in ('ab_v30', 'ab_v31', 'ab_v32', 'ab_v33')),
+                           kv_beta=(key not in ('ab_v30', 'ab_v31', 'ab_v32', 'ab_v33')),
+                           kv_delta=('v35d' in key),
+                           kv_dim=(48 if key.startswith('big_v36') or key.startswith('scale_v36')
+                                   or key.startswith('big_v36b1') else None),
+                           kv_backend=backend, kv_beta_init=beta_init)
+    sd = torch.load(os.path.join(key, 'model.pt') if key not in CKPTS
+                    else CKPTS[key][0], map_location='cpu', weights_only=True)
+    m.load_state_dict(sd)
     m.eval()
     return m.cuda()
+
 
 
 @torch.no_grad()
@@ -144,7 +122,7 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['scale_v36_15k', 'scale_gdn_30k', 'big_v35']
+MODEL_KEYS = ['big_v35_3k', 'big_v36', 'big_v36b1', 'big_gdn']
 models = {k: load_model(k) for k in MODEL_KEYS}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]
 results['A_len_ppl'] = {}
@@ -225,7 +203,7 @@ for k, m in models.items():
 # ============ Test D: v3 学习到的 γ 有效记忆长度 ============
 print('\n===== D. γ 有效记忆长度（真实语料统计） =====')
 results['D_gamma'] = {}
-for k in ('big_v35_3k', 'big_v36'):
+for k in ('big_v35_3k', 'big_v36', 'big_v36b1'):
     m = models[k]
     ids = stream[:8192].view(1, -1)
     horizons = []

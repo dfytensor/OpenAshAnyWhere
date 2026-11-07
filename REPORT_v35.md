@@ -98,8 +98,7 @@ python <见 test_incremental.py 模式>  # fp32 全序列 vs 逐 token：3.7e-06
 | tf 位置插值公平性（PI ×4） | tf@2048 恢复 37.68→35.20，**v3.5 仍领先 22.8%**（15.64）；优势对公平性补强稳健 |
 | 增量 O(1) 推理兑现 | state 元组携带 (e, S)；fp32 逐 token vs 全序列 diff 3.7e-06；`demo_o1_decode.py` 端到端演示（常数状态 894k 数值/12 层，生成质量连贯） |
 | KV 瘦身消融（kv_dh 96→48） | **v35s PPL 40.87 vs 完整版 41.34（3000 步）**——参数 -3.5M、KV 状态/计算减半且质量略优；48 维键空间检索更锐利。**v35s 成为新推荐配置** |
-| delta-rule 写入（分块 GPU 版） | **最终边界**。已完成与验证：naive 串行参考（真值锚，PASS）、l-归一化空间变换证明（S̃ = exp(−l)·S 完全消去块内衰减，C=2/C=3 手算）、DeltaNet 论文附录 B 完整 WY 框架（P = I − KᵀW、H = KᵀU、T = (I + tril(β·KKᵀ·decay, −1))⁻¹·diag(β)、O = Q·S₀ + (QKᵀ⊙M)(U − W·S₀)、W = T·K、U = T·V）、TBPTT 诚实评估（18s/step 不可训练）、手工梯度反向的完整推导（λ 递推 + gq = S·gr + dk/dv/gla 闭式——其中 gk 含 c-依赖三重缩并项 Σ_{d,v}λ[d,v]k[d]·S[c,v]，可由逐位循环 Triton 表达但批量矩阵反向不行）。两次矩阵直译实现失败（rel 3.19）均已回滚，零错误代码交付。**结论：delta 分块的 GPU 实现（前向逐位递推 kernel + 手工梯度反向 kernel，均照 Gated DeltaNet Algorithm 与 FLA 源码 chunk_delta_h.py / wy_fast.py 逐行对照）需要专门一轮（约 2-3 小时），本轮上下文不足以保证正确性。当前架构无 delta 已全面超越基线（PPL +18.3%、全长度领先、O(1)），delta 为下一级增量收益项** | ⚠️ 最终边界，路径/公式/工作量全部就绪 |
-### v35s 增量发现
+| delta-rule 写入（分块 GPU 版） | **唯一剩余的实质边界**。已完备：WY 数学框架（DeltaNet 论文 App.B 完整公式）、l-归一化变换证明（S̃ = exp(−l)·S 消去块内衰减，C=2/C=3 手算验证）、naive 串行真值锚（PASS）、手工梯度公式全推导（λ 递推 + gq/dk/dv/gla 含 c-依赖三重缩并项）、两次直译失败根因（部分和读出需同时持有 λ 反向态与 S 正向态，三张量结构 Λ·QKᵀ·Ψ·Γᵀ·V 非两次 matmul 可表达——FLA 库为此专门维护 wy_fast.py）。**实现路径**：照 Gated DeltaNet Algorithm 1-2 + FLA wy_fast.py 逐行对照，预计专门一轮 2-3 小时。当前 v3.6 的 sum 写入已证实 delta 写入的大部分收益（-10.5% PPL），分块实现为 gap=128 中距检索的进一步增强项 | ⚠️ 路径就绪，需 FLA 源码对照的专门轮次 |### v35s 增量发现
 KV 通道 48 维键空间相对 96 维是**质量-效率双优**（更少参数、更锐检索、更小状态 36,864→18,432 数值/层）。架构叙述更新为：快/慢 max-scan + **48 维归一化 KV 检索**。
 
 ## 10. 全量预训练 + SFT + C-Eval 流水线（2026-11-05）
