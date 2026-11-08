@@ -55,7 +55,8 @@ def load_model(key):
             from baseline_fla import build_deltanet, FlaLMWrapper
             m = FlaLMWrapper(build_deltanet())
             wrapper = True
-        elif key.startswith('big_tf') or key.startswith('ab_tf') or key.startswith('scale_tf'):
+        elif key.startswith('big_tf') or key.startswith('ab_tf') or key.startswith('scale_tf') \
+                or key.startswith('full_tf'):
             from baseline_tf import TransformerLM
             m = TransformerLM(VOC, HID, HEADS, 11, max_seq_len=2048)
             wrapper = True
@@ -66,7 +67,7 @@ def load_model(key):
             beta_init = 0.0
             if key.startswith('big_v36') or key.startswith('scale_v36') \
                     or key.startswith('big_v36b1') or key.startswith('big_v37') \
-                    or key.startswith('scale_v37'):
+                    or key.startswith('scale_v37') or key.startswith('full_v37'):
                 backend = 'delta_fla'
             if key.endswith('b1'):
                 beta_init = 4.0
@@ -83,7 +84,7 @@ def load_model(key):
                            kv_delta=('v35d' in key),
                            kv_dim=(48 if key.startswith('big_v36') or key.startswith('scale_v36')
                                    or key.startswith('big_v36b1') or key.startswith('big_v37')
-                                   or key.startswith('scale_v37') else None),
+                                   or key.startswith('scale_v37') or key.startswith('full_v37') else None),
                            kv_backend=backend, kv_beta_init=beta_init, short_conv=('v37' in key))
     sd = torch.load(os.path.join(key, 'model.pt') if key not in CKPTS
                     else CKPTS[key][0], map_location='cpu', weights_only=True)
@@ -124,7 +125,7 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['big_v35', 'scale_v36_15k', 'scale_v37_15k', 'scale_gdn_30k', 'big_tf']
+MODEL_KEYS = ['full_v35', 'full_v37', 'full_tf']
 models = {k: load_model(k) for k in MODEL_KEYS}
 wrapper_keys = {k for k in MODEL_KEYS if not hasattr(models[k], 'decoder_layers')}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]
