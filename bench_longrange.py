@@ -47,7 +47,8 @@ def load_model(key):
     else:
         path = os.path.join(key, 'model.pt')
         # FLA 官方基线（wrapper 保存，键带 model. 前缀）
-        if key.startswith('big_gdn') or key.startswith('scale_gdn'):
+        if key.startswith('big_gdn') or key.startswith('scale_gdn') \
+                or key.startswith('full_gdn'):
             from baseline_fla import build_gdn, FlaLMWrapper
             m = FlaLMWrapper(build_gdn())
             wrapper = True
@@ -125,7 +126,7 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['full_v35', 'full_v37', 'full_tf']
+MODEL_KEYS = ['full_v35', 'full_v37', 'full_gdn_80k', 'full_tf']
 models = {k: load_model(k) for k in MODEL_KEYS}
 wrapper_keys = {k for k in MODEL_KEYS if not hasattr(models[k], 'decoder_layers')}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]

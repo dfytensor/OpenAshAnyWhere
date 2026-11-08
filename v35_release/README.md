@@ -53,6 +53,23 @@ O(S) 训练 / O(1) 推理状态的线性注意力架构。核心机制：**快/�
 
 **七个长度双杀 v35 与 tf**；复制召回 gap=128 gain +0.95 反超 tf（+0.84）；曲线未饱和。γ 诊断证实 delta KV 通道接管长程记忆（v37 全层快 γ 仍在 @2048 胜过保留慢 γ 的 v35）。原始数据：`results/longrange_results_40k_full.json`（五模型 15000 步版见 `longrange_results_15k_5model.json`）。
 
+## 终局裁决 vs GDN（等 epoch 488M tokens，2026-11-08）
+
+Gated DeltaNet (FLA 官方, 106.3M, bs16×80000 步) vs **v3.7 (101.3M, bs32×40000 步)**——同 token 预算：
+
+| L | **v3.7** | GDN | v37 领先 |
+|---|---|---|---|
+| 64 | **14.38** | 19.63 | −26.7% |
+| 128 | **13.03** | 16.00 | −18.6% |
+| 384 | **12.10** | 12.79 | −5.4% |
+| 2048 | 11.73 | **11.28** | +3.8% |
+
+- **v3.7 在 64→512 五个长度击败 GDN**（等 epoch、O(1) 状态、参数 −4.7%）；GDN 仅 ≥1024 保持 +2~4%
+- 训练轨迹 v37 自 49M tokens 起全程领先且差距扩大（−2.3% → −5.4%）
+- 训练曲线：v37 12.10 vs GDN 12.79 vs tf 15.48（val @384 换算口径）
+
+架构：pre-norm RMSNorm ×2 + SiLU FFN + depthwise 因果短卷积 + max-scan 三通道 + delta-rule KV 检索（kv_dh=48）。`--arch v37`（FLA 快速路径）或 `--arch v39`（自研 `delta_chunk.py` 纯 torch 分块实现，前向/反向/初态对 FLA 全 PASS，去 flash-linear-attention 训练依赖）。原始数据：`results/longrange_results_final_gdn40k.json`。
+
 ## 环境要求
 
 - Python 3.11+，CUDA GPU ≥ 16GB 显存（24GB 更佳）

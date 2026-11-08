@@ -39,7 +39,7 @@ class MaxStateSuper(torch.nn.Module):
                  state_rank=None, use_decay=True,
                  decay_init=(0.001, 0.15), decay_v_std=0.0,
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False,
-                 kv_delta=False, kv_dim=None, kv_backend='sum', kv_beta_init=0.0):
+                 kv_delta=False, kv_dim=None, kv_backend='sum', kv_beta_init=0.0, kv_beta_tok=False):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -62,9 +62,15 @@ class MaxStateSuper(torch.nn.Module):
             self.kv_norm_keys = kv_norm_keys   # k̂ L2 归一化（检索锐化，DeltaNet 惯例）
             self.kv_delta = kv_delta           # delta-rule 写入（重复键精确覆盖）
             self.kv_beta = nn.Parameter(torch.ones(heads)) if kv_beta else None
-            # v3.6: delta 写入走 FLA chunk_gated_delta_rule（写入强度 β 可学习）
-            if self.kv_backend == 'delta_fla':
+            # v3.6/v3.9: delta 写入（写入强度 β 可学习；FLA kernel 与自研分块共用）
+            if self.kv_backend in ('delta_fla', 'delta_chunk'):
                 self.kv_beta_fla = nn.Parameter(torch.full((heads,), kv_beta_init))
+                # v3.8: GDN 式 per-token β = sigmoid(w_h·k̂_t + b_h)
+                # W 零初始化 → 起点等价常数 β=sigmoid(2.0)≈0.88，训练中学习 token 依赖的写入强度
+                self.kv_beta_tok = kv_beta_tok
+                if kv_beta_tok:
+                    self.kv_beta_w = nn.Parameter(torch.zeros(heads, self.kv_dh))
+                    self.kv_beta_b = nn.Parameter(torch.full((heads,), 2.0))
 
         # v1/v2 为 4 路投影；v3 中 c 路改由 state_em 查表提供，故只需 3 路
         self.combined = nn.Linear(dim_size, 3 * dim_size, bias=False)
@@ -169,27 +175,62 @@ class MaxStateSuper(torch.nn.Module):
                 kk = kk / (kk.norm(dim=-1, keepdim=True) + 1e-6)
             if self.kv_beta is not None:
                 kk = kk * self.kv_beta.view(1, -1, 1, 1).to(kk.dtype)
-            if self.kv_backend == 'delta_fla' and FLA_GDN_OK:
+            if self.kv_backend in ('delta_fla', 'delta_chunk') and FLA_GDN_OK \
+                    and not (s_kv is not None and sx == 1):
                 r = None
-                # ---- v3.6：delta-rule 写入（FLA chunk_gated_delta_rule，含 backward）----
-                # FLA 布局：q/k/v (B,S,H,D)、g (B,S,H) log 域、beta (B,S,H)
+                # ---- v3.6/v3.9：delta-rule 写入（FLA kernel 或自研分块 torch 版）----
+                # 布局：q/k/v (B,S,H,D)、g (B,S,H) log 域、beta (B,S,H)
                 qq_f = qq.permute(0, 2, 1, 3).float()        # (B,S,H,kv_dh)
                 kk_f = kk.permute(0, 2, 1, 3).float()        # (B,S,H,kv_dh) 归一化键
                 vv_f = kk_f.float()                          # delta 写入 v = k
                 g_f = log_a.permute(0, 2, 1).float()         # (B,S,H) log 域衰减
-                beta_f = torch.sigmoid(self.kv_beta_fla).view(1, 1, -1)\
-                    .expand(bx, sx, self.heads).to(qq_f.dtype)
-                o, s_kv_new = chunk_gated_delta_rule(
-                    q=qq_f, k=kk_f, v=vv_f, g=g_f, beta=beta_f,
-                    initial_state=s_kv, output_final_state=True,
-                    use_qk_l2norm_in_kernel=False)
+                if getattr(self, 'kv_beta_tok', False):
+                    # v3.8: per-token β（fp32 einsum，kk_f 已归一化）
+                    beta_f = torch.sigmoid(
+                        torch.einsum('bshd,hd->bsh', kk_f, self.kv_beta_w.float())
+                        + self.kv_beta_b.view(1, 1, -1).float())
+                else:
+                    beta_f = torch.sigmoid(self.kv_beta_fla).view(1, 1, -1)\
+                        .expand(bx, sx, self.heads).to(qq_f.dtype)
+                if self.kv_backend == 'delta_chunk':
+                    # v3.9: 自研分块实现（纯 torch，autograd 反向；test_delta_chunk.py 全 PASS）
+                    from delta_chunk import chunked_delta_rule
+                    o, s_kv_new = chunked_delta_rule(
+                        qq_f, kk_f, vv_f, g_f, beta_f,
+                        initial_state=s_kv, output_final_state=True)
+                else:
+                    o, s_kv_new = chunk_gated_delta_rule(
+                        q=qq_f, k=kk_f, v=vv_f, g=g_f, beta=beta_f,
+                        initial_state=s_kv, output_final_state=True,
+                        use_qk_l2norm_in_kernel=False)
                 # o (B,S,H,kv_dh) → gen_model 布局 (B,d_head,S,H)
                 o_p = o.permute(0, 3, 1, 2)                     # (B,kv_dh,S,H)
                 if self.kv_dh < self.d_head:
                     o_p = F.pad(o_p, (0, 0, 0, 0, 0, self.d_head - self.kv_dh))
                 out_l = out_l + self.kv_gate * o_p.to(out_l.dtype)
+            elif s_kv is not None and sx == 1 and self.kv_backend in ('delta_fla', 'delta_chunk'):
+                # 增量单步（O(1) 解码，delta 写入，纯 torch fp32 精确）：
+                #   S ← a·S + β·k̂⊗(k̂ − β·(k̂S))；r = q·S·K^−0.5
+                #   （与训练时 delta 覆盖语义一致；v3.9 修复：旧版误用 sum 写入）
+                a_step = torch.exp(log_a[..., 0])                       # (B,H)
+                # kk (B,H,S,D) → kd (B,H,D)；s_kv (B,H,K,V)（FLA 布局）
+                kd = kk.to(qq.dtype).squeeze(2)
+                if getattr(self, 'kv_beta_tok', False):
+                    bd = torch.sigmoid(torch.einsum('bhd,hd->bh', kd.float(),
+                                                    self.kv_beta_w.float())
+                                       + self.kv_beta_b.view(1, -1).float()).to(qq.dtype)
+                else:
+                    bd = torch.sigmoid(self.kv_beta_fla).view(1, -1).to(qq.dtype)  # (B,H)
+                sv = torch.einsum('bhd,bhdv->bhv', kd, s_kv.to(qq.dtype))
+                # 锚定 FLA 单 token 语义：S ← a·S + k⊗(β·k − β·a·(kS))（衰减在读出前应用）
+                corr = kd - a_step.unsqueeze(-1) * sv                  # (B,H,D)
+                s_new = a_step[..., None, None] * s_kv.to(qq.dtype) \
+                    + (kd * bd.unsqueeze(-1)).unsqueeze(-1) * corr.unsqueeze(-2)  # (B,H,D,V)
+                r = torch.einsum('bhd,bhdv->bhv', qq.to(qq.dtype).squeeze(2), s_new) \
+                    * float(self.kv_dh) ** -0.5                         # 锚定 chunk_fwd_o scale
+                s_kv_new = s_new
             elif s_kv is not None and sx == 1:
-                # 增量单步（O(1) 解码）：S ← a·S + (β·k̂)⊗(β·k̂)；r = q·S——纯 torch 小 op
+                # 增量单步（O(1) 解码，sum 写入）：S ← a·S + k̂⊗k̂；r = q·S
                 a_step = torch.exp(log_a[..., 0])                       # (B,H)
                 s_new = a_step[..., None, None] * s_kv \
                     + torch.einsum('bhd,bhv->bhdv',
@@ -262,14 +303,14 @@ class DecoderLayer(torch.nn.Module):
                  state_rank=None, use_decay=True, pre_norm=False, ffn_act="relu",
                  decay_init=(0.001, 0.15), decay_v_std=0.0, kv_channel=False, kv_decay=0.98,
                  kv_norm_keys=False, kv_beta=False, kv_delta=False, kv_dim=None,
-                 kv_backend='sum', kv_beta_init=0.0, short_conv=False, conv_kernel=4):
+                 kv_backend='sum', kv_beta_init=0.0, short_conv=False, conv_kernel=4, kv_beta_tok=False):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
                                                    decay_init, decay_v_std,
                                                    kv_channel, kv_decay,
                                                    kv_norm_keys, kv_beta, kv_delta, kv_dim,
-                                                   kv_backend, kv_beta_init)
+                                                   kv_backend, kv_beta_init, kv_beta_tok)
         self.ffn = FeedForward(hidden_size, ffn_act)
         self.layer_norm = torch.nn.LayerNorm(hidden_size)
         self.pre_norm = pre_norm
@@ -293,11 +334,36 @@ class DecoderLayer(torch.nn.Module):
         if self.pre_norm:
             xn = self.norm1(x)
             if self.short_conv is not None:
-                # 因果 depthwise conv：左 pad，截尾
-                xc = self.short_conv(xn.transpose(1, 2))[:, :, :xn.shape[1]].transpose(1, 2)
-                xn = xn + torch.nn.functional.silu(xc) * (1 + self.conv_gate)
-            x1, state = self.self_attention_linear(xn, ids, state)
+                # v3.9: 因果 conv 增量解码支持——状态携带最近 k−1 个输入的滚动缓冲
+                # （无缓冲的全序列路径不变；sx==1 时用缓冲重建左上下文）
+                conv_buf = None
+                sub_state = state
+                if isinstance(state, tuple) and len(state) == 3:
+                    conv_buf = state[2]
+                    sub_state = (state[0], state[1])
+                xn_c = xn.transpose(1, 2)                          # (B, D, S)
+                kc = self.short_conv.kernel_size[0]
+                if conv_buf is not None and xn.shape[1] == 1:
+                    cat = torch.cat([conv_buf, xn_c], dim=2)       # (B, D, buf+1)
+                    # 最后一个输出位 = 真实 token 的因果卷积（tap 对齐：最新 token 用 w3）
+                    xc = self.short_conv(cat)[:, :, cat.shape[2] - 1][:, :, None]
+                    new_buf = cat[:, :, -(kc - 1):]
+                else:
+                    xc = self.short_conv(xn_c)[:, :, :xn.shape[1]]
+                    new_buf = xn_c[:, :, -(kc - 1):]
+                xn = xn + torch.nn.functional.silu(xc.transpose(1, 2)) * (1 + self.conv_gate)
+            else:
+                new_buf = None
+                sub_state = state
+            x1, sub_state = self.self_attention_linear(xn, ids, sub_state)
+            if new_buf is not None:
+                # 重打包：state = (e, S, conv_buf)（kv_channel）或 (e, conv_buf)
+                if isinstance(sub_state, tuple) and len(sub_state) == 2:
+                    sub_state = (sub_state[0], sub_state[1], new_buf)
+                else:
+                    sub_state = (state, None, new_buf)
             x = x + self.ffn(self.norm2(x1))
+            state = sub_state
         else:
             x1, state = self.self_attention_linear(x, ids, state)
             x = self.layer_norm(self.alpha * self.ffn(x1) + (1 - self.alpha) * x)
@@ -354,7 +420,7 @@ class OpenASH_V3(torch.nn.Module):
                  use_fused=True, state_rank=64, ce_chunk=256, use_decay=True,
                  pre_norm=False, ffn_act="relu", decay_init=(0.001, 0.15), decay_v_std=0.0,
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False, kv_delta=False,
-                 kv_dim=None, kv_backend='sum', kv_beta_init=0.0, short_conv=False):
+                 kv_dim=None, kv_backend='sum', kv_beta_init=0.0, short_conv=False, kv_beta_tok=False):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -369,7 +435,7 @@ class OpenASH_V3(torch.nn.Module):
             [DecoderLayer(hidden_size, num_heads, voc_size, model_flag, use_fused, state_rank, use_decay,
                           pre_norm, ffn_act, decay_init, decay_v_std, kv_channel, kv_decay,
                           kv_norm_keys, kv_beta, kv_delta, kv_dim, kv_backend, kv_beta_init,
-                          short_conv)
+                          short_conv, kv_beta_tok=kv_beta_tok)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.head_score = nn.Linear(hidden_size, voc_size, bias=False)
