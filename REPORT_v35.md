@@ -228,6 +228,40 @@ v3.7 的重复 span 绝对 CE 在全部 gap 档位为五模型最低（tf 的更
 
 ### 下一步
 1. ~~v37@40000 步全 epoch~~ ✅ 已完成：12.10@384 / 11.73@2048，全长度双杀
-2. β 门控（kv_beta_fla）初始化/参数化调优——对齐 GDN 门控写入强度的最后一块
-3. delta-rule 分块自研 kernel（§9 路径已就绪，去 FLA 依赖）
-4. GDN@40000 步等 epoch 对照（bs16×80000 步）——当前 vs GDN 结论止于 15000 步等 token（差 4.9%）
+2. ~~β 门控调优~~ ✅ 已完成（v38，见 §12）
+3. ~~delta-rule 自研 kernel~~ ✅ 已完成（v3.9 纯 torch 分块实现，见 §12——比手工 Triton WY 路径更优）
+4. ~~GDN@40000 步等 epoch 对照~~ 🔄 full_gdn_80k 训练中（bs16×80000 步 = 488M tokens）
+
+## 12. v3.8/v3.9：β 门控与自研 delta-rule（2026-11-08）
+
+### v3.8：GDN 式 per-token β（归档，未采纳）
+
+β_t = sigmoid(w_h·k̂_t + b_h)，W 零初始化（起点等价常数 β=0.88）。**3000 步结果：23.46 vs v37 23.45——持平**。机制：kv_gate 零初始化把整个 KV 通道输出早期静音，β 梯度被 kv_gate 阻断——训练 40000 步后 per-head 常数 β 也几乎未移动（raw 3.4-4.2，即 init 4.0 原地）。结论：β 通道在当前架构中不是瓶颈，per-token β 与 β-init 扫描均无短期收益；若未来让 kv_gate 预热更快或 β 直接进主通路，可重测。
+
+### v3.9：自研分块 delta-rule（去 FLA 训练依赖 + 精确 O(1) 解码）
+
+**两次手工 Triton WY 失败的替代路径**：观察到本仓库 T=384/BT=64 → NT 仅 6 个 chunk——纯 torch 分块实现（autograd 免费反向）完全可行，无需手工 Triton 反向。`delta_chunk.py` 逐行锚定 FLA `chunk_delta_h/wy_fast/chunk_fwd/chunk_o` 四文件。
+
+**正确性**：`test_delta_chunk.py` 全 PASS——4 种形状前向（o/S 终态误差 ≤3e-4，fp32 求和序噪声级）+ 初态支持 + 反向五梯度（dq/dk/dv/dg/dβ vs FLA 手写 Triton 反向 ≤1e-3）。
+
+**三个关键约定修正**（对照 FLA 源码 + 2-token 手推双重确认）：
+1. **WY 逆 = (I + L)⁻¹（正号）**：chunk 内 delta 覆盖的修正是加法复合（k₂S₁ 含 write₁ 中的 −βkS 项二次翻号），非论文转置布局下的 (I−L)⁻¹
+2. **L 仅乘行 β**：`chunk_scaled_dot_kkt_fwd` 的 β_s 只乘行；列 β_t 在 w=A@(βe^g·k)、u=A@(βv) 构造时才进入
+3. **输出全局 scale = K^−0.5**：chunk_fwd_o 对 inter+intra 同乘（本仓库 v3.6+ 训练一直隐含此缩放）
+
+**速度**：与 FLA 同量级（fwd+bwd 计时在 GPU 共享时 50 vs 54 ms），训练路径 ~2-4× 慢于 FLA 融合 kernel（符合预估：NT=6 循环的 kernel-launch 开销）；FLA 保留为快速路径，`kv_backend='delta_chunk'` 为去依赖备选。
+
+### v3.9 附带修复：v3.7+ 增量解码三处 bug（全长度 fp32 验证）
+
+修复前 v37 逐 token vs 全序列 logp 差 2.96（v35 无卷积参照 4.29e-06 精确）：
+1. **短卷积解码缺状态**：conv 感受野需前 k−1=3 个 token 的 xn——状态元组扩展为 (e, S, conv_buf)（每层 +3×768 数值，仍严格 O(1)）
+2. **conv tap 对齐**：解码输出索引应为 len(cat)−1（最新 token 对应最后一个 kernel tap w₃），全缓冲时恰好等于 k−1 掩盖了早期短缓冲的错位
+3. **delta 单步语义**：旧版对 delta 模型误用 sum 写入；正确公式 **S ← a·S + k⊗(β·k − β·a·(kS))**（衰减在读出前应用，系数 β·a 非 β²），读出补 K^−0.5 缩放
+
+修复后：**vs 自研 fp32 参考精确到 2.1e-05**（vs FLA 全序列 7e-03 为 FLA kernel tf32 噪声上限）。
+
+### 下一步
+1. ~~v37@40000 步全 epoch~~ ✅ 12.10@384，全长度双杀
+2. ~~β 门控调优~~ ✅ v38 持平，机制已明（kv_gate 阻断）
+3. ~~自研 delta-rule~~ ✅ v3.9 delta_chunk 全 PASS
+4. GDN@40000 等 epoch（full_gdn_80k）：bs16×80000 步 = 488M tokens，训练中
