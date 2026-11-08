@@ -8,6 +8,12 @@ import torch.nn.functional as F
 
 from fla.utils import input_guard
 
+try:
+    from .triton_backend import triton_decay_max_scan
+    TRITON_BACKEND = True
+except Exception:        # ImportError or triton compile issues on unsupported stacks
+    TRITON_BACKEND = False
+
 CHUNK = 128
 
 
@@ -68,6 +74,10 @@ def chunk_decay_max_scan(
             Final running state `[B, D, H]`.
     """
     B, T, D, H = x.shape
+    # dense CUDA batches take the Triton backend; varlen packing and non-CUDA
+    # tensors run the vectorized torch scan below
+    if cu_seqlens is None and TRITON_BACKEND and x.is_cuda:
+        return triton_decay_max_scan(x, decay_v, decay_b, initial_state)
     xf = x.float()
     if decay_v is not None:
         pre = xf * decay_v.float().view(1, 1, D, 1) + decay_b.float().view(1, 1, D, 1)

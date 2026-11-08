@@ -30,6 +30,17 @@ which poisons the cummax through `x / pref`. The doubling form only clamps the
 decay product at `1e-30`, where the decayed history term is negligible for
 bounded inputs.
 
+## Triton backend (triton_backend.py)
+
+Dense CUDA batches dispatch to Triton kernels (`triton_backend.py`): a
+block-local reverse scan produces per-chunk carries `(g, m, owner)`, a carry
+composition kernel sweeps the sequence writing outputs and the argmax-owner
+chain, and the backward is a reverse BPTT kernel over per-position coefficients
+recomputed in torch (no coefficient tensors saved for backward). varlen
+(`cu_seqlens`) and non-CUDA tensors run the torch doubling scan above.
+Measured throughput (RTX 3090, B8-32, T384-2048, D96, H8): Triton 18-21 Mtok/s,
+torch semiring 0.8-3.7, sequential naive 0.13-0.5.
+
 ## Gradients
 
 Where the input branch wins (`x_t > g_t * e_{t-1}`), gradients flow into `x_t`;
