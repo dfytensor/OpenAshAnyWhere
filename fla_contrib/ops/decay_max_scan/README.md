@@ -38,8 +38,10 @@ composition kernel sweeps the sequence writing outputs and the argmax-owner
 chain, and the backward is a reverse BPTT kernel over per-position coefficients
 recomputed in torch (no coefficient tensors saved for backward). varlen
 (`cu_seqlens`) and non-CUDA tensors run the torch doubling scan above.
-Measured throughput (RTX 3090, B8-32, T384-2048, D96, H8): Triton 18-21 Mtok/s,
-torch semiring 0.8-3.7, sequential naive 0.13-0.5.
+Measured throughput (RTX 4090 D, B8-32, T384-2048, D96, H8): Triton 18-21 Mtok/s,
+torch semiring 0.8-3.8, sequential naive 0.13-0.76. The Triton backend is
+validated on Windows (triton 3.2) and Linux (WSL2; triton 3.2 and 3.6 on the
+FLA target stack, torch 2.11), including `FLA_CI_ENV=0` strict-mode tests.
 
 ## Gradients
 

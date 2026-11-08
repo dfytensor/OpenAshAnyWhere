@@ -42,9 +42,24 @@ kernel, and a reverse-BPTT backward.
 - `fused_recurrent.py` — single-step decode update
 - `tests/ops/test_decay_max_scan.py` — forward/state/gradient checks vs `naive.py`
   (dense, varlen, fp16, non-power-of-2 lengths) and decode equivalence — 8 passed
-- `benchmarks/bench_decay_max_scan.py` — measured on RTX 3090/Windows (488M-token
-  training runs were on the same stack): Triton 18-21 Mtok/s, torch semiring
-  0.8-3.7, sequential naive 0.13-0.5
+  on Windows and Linux (WSL2, `FLA_CI_ENV=0` strict mode)
+- `benchmarks/bench_decay_max_scan.py` — measured on RTX 4090 D 24GB (the
+  488M-token training runs were on the same stack): Triton 18-21 Mtok/s,
+  torch semiring 0.8-3.7, sequential naive 0.13-0.5
+
+## Validation status
+
+- Windows 11 / RTX 4090 D / torch 2.6.0+cu124 / triton 3.2.0: 8/8 tests pass,
+  throughput as above.
+- **Linux (WSL2 Ubuntu) on the FLA target stack** — RTX 4090 D / torch
+  2.11.0+cu128 / triton 3.6.0 (exceeds the torch >= 2.7, triton >= 3.3
+  prerequisites): 8/8 tests pass under `FLA_CI_ENV=0` strict mode; throughput
+  parity (17.9-21.5 Mtok/s).
+- Linux / triton 3.2.0 (torch 2.6.0+cu124) also validated: 8/8 pass. The
+  kernels were originally developed under a Windows Triton build that exhibited
+  a "loop-exit accumulator store" miscompilation; the per-step-store
+  formulation they use compiles and validates cleanly on Linux Triton 3.2/3.6.
+- Hopper/Blackwell targets are untested (development hardware is Ada).
 
 ## Known gaps before merge
 
@@ -52,8 +67,5 @@ kernel, and a reverse-BPTT backward.
    per kernel conventions (shapes up to 96*2048*8 stay well inside int32).
 2. varlen (`cu_seqlens`) currently routes to the torch path; a Triton varlen
    variant is follow-up work.
-3. Kernels were developed/validated on Windows/Triton (where a "loop-exit
-   accumulator store" miscompilation was observed and avoided by per-step
-   stores); re-validation on Linux/Hopper is required.
-4. Model integration (HF `PreTrainedModel` + cache class) is a separate
+3. Model integration (HF `PreTrainedModel` + cache class) is a separate
    follow-up PR.
