@@ -65,7 +65,8 @@ def load_model(key):
             backend = 'sum'
             beta_init = 0.0
             if key.startswith('big_v36') or key.startswith('scale_v36') \
-                    or key.startswith('big_v36b1'):
+                    or key.startswith('big_v36b1') or key.startswith('big_v37') \
+                    or key.startswith('scale_v37'):
                 backend = 'delta_fla'
             if key.endswith('b1'):
                 beta_init = 4.0
@@ -81,8 +82,9 @@ def load_model(key):
                            kv_beta=(key not in ('ab_v30', 'ab_v31', 'ab_v32', 'ab_v33')),
                            kv_delta=('v35d' in key),
                            kv_dim=(48 if key.startswith('big_v36') or key.startswith('scale_v36')
-                                   or key.startswith('big_v36b1') else None),
-                           kv_backend=backend, kv_beta_init=beta_init)
+                                   or key.startswith('big_v36b1') or key.startswith('big_v37')
+                                   or key.startswith('scale_v37') else None),
+                           kv_backend=backend, kv_beta_init=beta_init, short_conv=('v37' in key))
     sd = torch.load(os.path.join(key, 'model.pt') if key not in CKPTS
                     else CKPTS[key][0], map_location='cpu', weights_only=True)
     m.load_state_dict(sd)
@@ -122,8 +124,9 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['big_v35_3k', 'big_v36', 'big_v36b1', 'big_gdn']
+MODEL_KEYS = ['big_v35', 'scale_v36_15k', 'scale_v37_15k', 'scale_gdn_30k', 'big_tf']
 models = {k: load_model(k) for k in MODEL_KEYS}
+wrapper_keys = {k for k in MODEL_KEYS if not hasattr(models[k], 'decoder_layers')}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]
 results['A_len_ppl'] = {}
 hdr = 'L'.rjust(6) + ''.join(k.rjust(14) for k in models)
@@ -203,7 +206,7 @@ for k, m in models.items():
 # ============ Test D: v3 学习到的 γ 有效记忆长度 ============
 print('\n===== D. γ 有效记忆长度（真实语料统计） =====')
 results['D_gamma'] = {}
-for k in ('big_v35_3k', 'big_v36', 'big_v36b1'):
+for k in [key for key in MODEL_KEYS if key not in wrapper_keys]:
     m = models[k]
     ids = stream[:8192].view(1, -1)
     horizons = []

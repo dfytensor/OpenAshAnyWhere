@@ -20,6 +20,28 @@ O(S) 训练 / O(1) 推理状态的线性注意力架构。核心机制：**快/�
 
 全量预训练（40000 步 = 1 epoch × 488M tokens）：v3.5 **12.75** vs tf 15.61（领先 +18.3%，缩放优势随训练量扩大）。
 
+## v3.7（2026-11-08 更新）：+delta 写入 +短卷积，全部七个长度击败 tf
+
+在 v3.5 基础上两步进化（`train_ab.py --arch v37`）：
+
+1. **v3.6 delta 写入**：KV 检索通道的 sum 累积 → FLA `chunk_gated_delta_rule` 精确覆盖（依赖 `pip install flash-linear-attention`，`baseline_fla.py` 同含 GDN/DeltaNet 基线适配器）
+2. **v3.7 depthwise 因果短卷积**（kernel=4，per-channel SiLU 门控，注意力前）
+
+15000 步等预算五模型对决（184M tokens；GDN 为 bs16×30000 步等 token 换算，101-106M 参数）：
+
+| L | v3.5 | v3.6 | **v3.7** | GDN | tf |
+|---|---|---|---|---|---|
+| 64 | 20.68 | 18.39 | **17.16** | 21.60 | 19.47 |
+| 128 | 19.02 | 17.01 | **15.98** | 17.88 | 18.05 |
+| 384 | 17.82 | 16.02 | 15.10 | **14.40** | 17.93 |
+| 2048 | 17.40 | 15.68 | 14.79 | **12.81** | 37.68 |
+
+- **v3.7 在 64→2048 全部七个长度击败同预算 tf**（@384 −15.8%，@2048 −60.7%），保持严格 O(1) 推理状态
+- 短上下文（≤128）同时反超 GDN；@384 与 GDN 残差收窄至 4.9%
+- 远程复制召回：重复 span 绝对 CE 全部 gap 档位五模型最低
+
+演进链（15000 步 PPL@384）：v3.0 84.53 → v3.5 17.82 → v3.6 16.02 → **v3.7 15.10**（累计 −82%）。详见仓库根 `REPORT_v35.md` §11。
+
 ## 环境要求
 
 - Python 3.11+，CUDA GPU ≥ 16GB 显存（24GB 更佳）
@@ -31,9 +53,10 @@ O(S) 训练 / O(1) 推理状态的线性注意力架构。核心机制：**快/�
 ## 文件结构
 
 ```
-open_ash_v3.py        v3.5 架构（三通道注意力层 + 完整模型）
+open_ash_v3.py        v3.5/v3.6/v3.7 架构（三通道注意力层 + 短卷积 + delta 写入 + 完整模型）
 triton_ops.py         全部 Triton/torch kernel（max-scan 前向/反向、gen_model 融合、KV scan、CE 融合）
 baseline_tf.py        同预算 Transformer 基线（RoPE+RMSNorm+SwiGLU+SDPA，95.5M）
+baseline_fla.py       FLA 库基线适配器（Gated DeltaNet 106.3M / DeltaNet 99.2M；v3.6+ delta 写入依赖）
 open_ash_voc.py       jieba 词级编码器（含对话特殊 token）
 open_ash_voc_agent.json  词表文件（311MB，本仓库 LFS）
 config.py             词表路径配置

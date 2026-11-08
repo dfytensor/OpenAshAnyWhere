@@ -15,11 +15,36 @@ from open_ash_v3 import OpenASH_V3
 from baseline_tf import TransformerLM
 
 DEV = 'cuda'
-DATA = r'minimind_data\pretrain_cached_30000_384.pt'
+DATA = r'F:\OpenASH2605\minimind_data\pretrain_cached_30000_384.pt'
 VOC, HID, HEADS, LAYERS = 23004, 768, 8, 12
 
 
 def build(arch):
+    if arch in ('m2', 'gdn', 'dn'):
+        import baseline_fla
+        return baseline_fla.FlaLMWrapper(baseline_fla.BUILDERS[arch]())
+    if arch == 'v36b1':
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=48, kv_backend='delta_fla', kv_beta_init=4.0)
+    if arch == 'v37':
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=48, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True)
+    if arch == 'v36':
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=48, kv_backend='delta_fla')
     if arch == 'v30':
         return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=512, model_flag='train',
                           use_fused=True, use_decay=False)
@@ -103,7 +128,7 @@ def main():
     ap.add_argument('--lr', type=float, default=3e-4)
     ap.add_argument('--warmup', type=int, default=150)
     ap.add_argument('--out', required=True)
-    ap.add_argument('--data', default=r'minimind_data\pretrain_cached_30000_384.pt')
+    ap.add_argument('--data', default=r'F:\OpenASH2605\minimind_data\pretrain_cached_30000_384.pt')
     ap.add_argument('--eval_every', type=int, default=2000)
     args = ap.parse_args()
     arch = args.arch

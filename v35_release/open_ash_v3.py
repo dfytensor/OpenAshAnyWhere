@@ -10,6 +10,13 @@ try:
 except ImportError:
     tops = None
 
+try:
+    from fla.ops.gated_delta_rule import chunk_gated_delta_rule
+    FLA_GDN_OK = True
+except ImportError:
+    chunk_gated_delta_rule = None
+    FLA_GDN_OK = False
+
 
 def _fused_available(x):
     return tops is not None and tops.TRITON_OK and x.is_cuda
@@ -32,11 +39,12 @@ class MaxStateSuper(torch.nn.Module):
                  state_rank=None, use_decay=True,
                  decay_init=(0.001, 0.15), decay_v_std=0.0,
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False,
-                 kv_delta=False, kv_dim=None):
+                 kv_delta=False, kv_dim=None, kv_backend='sum', kv_beta_init=0.0):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
         self.kv_dh = kv_dim if kv_dim else self.d_head   # KV 通道头维（瘦身消融用）
+        self.kv_backend = kv_backend                     # 'sum'（v3.5s）| 'delta_fla'（v3.6）
         self.model_flag = model_flag
         self.use_fused = use_fused
         self.use_decay = use_decay
@@ -54,6 +62,9 @@ class MaxStateSuper(torch.nn.Module):
             self.kv_norm_keys = kv_norm_keys   # k̂ L2 归一化（检索锐化，DeltaNet 惯例）
             self.kv_delta = kv_delta           # delta-rule 写入（重复键精确覆盖）
             self.kv_beta = nn.Parameter(torch.ones(heads)) if kv_beta else None
+            # v3.6: delta 写入走 FLA chunk_gated_delta_rule（写入强度 β 可学习）
+            if self.kv_backend == 'delta_fla':
+                self.kv_beta_fla = nn.Parameter(torch.full((heads,), kv_beta_init))
 
         # v1/v2 为 4 路投影；v3 中 c 路改由 state_em 查表提供，故只需 3 路
         self.combined = nn.Linear(dim_size, 3 * dim_size, bias=False)
@@ -158,7 +169,26 @@ class MaxStateSuper(torch.nn.Module):
                 kk = kk / (kk.norm(dim=-1, keepdim=True) + 1e-6)
             if self.kv_beta is not None:
                 kk = kk * self.kv_beta.view(1, -1, 1, 1).to(kk.dtype)
-            if s_kv is not None and sx == 1:
+            if self.kv_backend == 'delta_fla' and FLA_GDN_OK:
+                r = None
+                # ---- v3.6：delta-rule 写入（FLA chunk_gated_delta_rule，含 backward）----
+                # FLA 布局：q/k/v (B,S,H,D)、g (B,S,H) log 域、beta (B,S,H)
+                qq_f = qq.permute(0, 2, 1, 3).float()        # (B,S,H,kv_dh)
+                kk_f = kk.permute(0, 2, 1, 3).float()        # (B,S,H,kv_dh) 归一化键
+                vv_f = kk_f.float()                          # delta 写入 v = k
+                g_f = log_a.permute(0, 2, 1).float()         # (B,S,H) log 域衰减
+                beta_f = torch.sigmoid(self.kv_beta_fla).view(1, 1, -1)\
+                    .expand(bx, sx, self.heads).to(qq_f.dtype)
+                o, s_kv_new = chunk_gated_delta_rule(
+                    q=qq_f, k=kk_f, v=vv_f, g=g_f, beta=beta_f,
+                    initial_state=s_kv, output_final_state=True,
+                    use_qk_l2norm_in_kernel=False)
+                # o (B,S,H,kv_dh) → gen_model 布局 (B,d_head,S,H)
+                o_p = o.permute(0, 3, 1, 2)                     # (B,kv_dh,S,H)
+                if self.kv_dh < self.d_head:
+                    o_p = F.pad(o_p, (0, 0, 0, 0, 0, self.d_head - self.kv_dh))
+                out_l = out_l + self.kv_gate * o_p.to(out_l.dtype)
+            elif s_kv is not None and sx == 1:
                 # 增量单步（O(1) 解码）：S ← a·S + (β·k̂)⊗(β·k̂)；r = q·S——纯 torch 小 op
                 a_step = torch.exp(log_a[..., 0])                       # (B,H)
                 s_new = a_step[..., None, None] * s_kv \
@@ -172,12 +202,12 @@ class MaxStateSuper(torch.nn.Module):
                 r, s_kv_new = tops.KvScanFn.apply(qq, kk, cc_perm, log_a, s_kv)
             else:
                 r, s_kv_new = tops.kv_chunked_scan(qq, kk, cc_perm, log_a, chunk=128, s0=s_kv)
-            if r.dim() == 4:
+            if r is not None and r.dim() == 4:
                 rp = r.permute(0, 3, 2, 1)                       # (B, kv_dh, S, H)
                 if self.kv_dh < self.d_head:
                     rp = F.pad(rp, (0, 0, 0, 0, 0, self.d_head - self.kv_dh))
                 out_l = out_l + self.kv_gate * rp.to(out_l.dtype)
-            else:
+            elif r is not None:
                 rp = r.permute(0, 2, 1)                          # (B, kv_dh, H)
                 if self.kv_dh < self.d_head:
                     rp = F.pad(rp, (0, 0, 0, self.d_head - self.kv_dh))
@@ -231,13 +261,15 @@ class DecoderLayer(torch.nn.Module):
     def __init__(self, hidden_size, num_heads, voc_size, model_flag="train", use_fused=True,
                  state_rank=None, use_decay=True, pre_norm=False, ffn_act="relu",
                  decay_init=(0.001, 0.15), decay_v_std=0.0, kv_channel=False, kv_decay=0.98,
-                 kv_norm_keys=False, kv_beta=False, kv_delta=False, kv_dim=None):
+                 kv_norm_keys=False, kv_beta=False, kv_delta=False, kv_dim=None,
+                 kv_backend='sum', kv_beta_init=0.0, short_conv=False, conv_kernel=4):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
                                                    decay_init, decay_v_std,
                                                    kv_channel, kv_decay,
-                                                   kv_norm_keys, kv_beta, kv_delta, kv_dim)
+                                                   kv_norm_keys, kv_beta, kv_delta, kv_dim,
+                                                   kv_backend, kv_beta_init)
         self.ffn = FeedForward(hidden_size, ffn_act)
         self.layer_norm = torch.nn.LayerNorm(hidden_size)
         self.pre_norm = pre_norm
@@ -245,11 +277,26 @@ class DecoderLayer(torch.nn.Module):
             self.norm1 = RMSNorm(hidden_size)
             self.norm2 = RMSNorm(hidden_size)
 
+        # v3.7: depthwise causal short conv（GDN/DeltaNet/Mamba 标配）
+        # 给线性注意力补上窗口内精确 n-gram 匹配能力
+        self.short_conv = None
+        if short_conv:
+            self.short_conv = nn.Conv1d(hidden_size, hidden_size, conv_kernel,
+                                        padding=conv_kernel - 1, groups=hidden_size,
+                                        bias=False)
+            nn.init.normal_(self.short_conv.weight, std=0.02)
+            self.conv_gate = nn.Parameter(torch.zeros(hidden_size))  # per-ch gate
+
         self.alpha = torch.nn.Parameter(torch.tensor(0.5))
 
     def forward(self, x, ids, state=None):
         if self.pre_norm:
-            x1, state = self.self_attention_linear(self.norm1(x), ids, state)
+            xn = self.norm1(x)
+            if self.short_conv is not None:
+                # 因果 depthwise conv：左 pad，截尾
+                xc = self.short_conv(xn.transpose(1, 2))[:, :, :xn.shape[1]].transpose(1, 2)
+                xn = xn + torch.nn.functional.silu(xc) * (1 + self.conv_gate)
+            x1, state = self.self_attention_linear(xn, ids, state)
             x = x + self.ffn(self.norm2(x1))
         else:
             x1, state = self.self_attention_linear(x, ids, state)
@@ -307,7 +354,7 @@ class OpenASH_V3(torch.nn.Module):
                  use_fused=True, state_rank=64, ce_chunk=256, use_decay=True,
                  pre_norm=False, ffn_act="relu", decay_init=(0.001, 0.15), decay_v_std=0.0,
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False, kv_delta=False,
-                 kv_dim=None):
+                 kv_dim=None, kv_backend='sum', kv_beta_init=0.0, short_conv=False):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -321,7 +368,8 @@ class OpenASH_V3(torch.nn.Module):
         self.decoder_layers = torch.nn.ModuleList(
             [DecoderLayer(hidden_size, num_heads, voc_size, model_flag, use_fused, state_rank, use_decay,
                           pre_norm, ffn_act, decay_init, decay_v_std, kv_channel, kv_decay,
-                          kv_norm_keys, kv_beta, kv_delta, kv_dim)
+                          kv_norm_keys, kv_beta, kv_delta, kv_dim, kv_backend, kv_beta_init,
+                          short_conv)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.head_score = nn.Linear(hidden_size, voc_size, bias=False)
