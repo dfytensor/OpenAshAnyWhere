@@ -30,6 +30,14 @@ def build(arch):
                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
                           kv_dim=48, kv_backend='delta_fla', kv_beta_init=4.0)
+    if arch == 'v40':
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=48, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, em_weights=True, ffn_hidden=2048)
     if arch == 'v39':
         return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
                           use_fused=True, use_decay=True,

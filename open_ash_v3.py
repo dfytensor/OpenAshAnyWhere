@@ -39,7 +39,8 @@ class MaxStateSuper(torch.nn.Module):
                  state_rank=None, use_decay=True,
                  decay_init=(0.001, 0.15), decay_v_std=0.0,
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False,
-                 kv_delta=False, kv_dim=None, kv_backend='sum', kv_beta_init=0.0, kv_beta_tok=False):
+                 kv_delta=False, kv_dim=None, kv_backend='sum', kv_beta_init=0.0, kv_beta_tok=False,
+                 em_ref=None):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -49,6 +50,8 @@ class MaxStateSuper(torch.nn.Module):
         self.use_fused = use_fused
         self.use_decay = use_decay
         assert dim_size % heads == 0, "Dimension size must be divisible by head size."
+        # v4.0: combined 投影由 em 变换得到（W = A @ em 切片，与输入嵌入共享梯度）
+        self.em_ref = em_ref
 
         # v3.4: 衰减 KV 记忆通道（query 相关检索），与 max-scan 互补:
         #   S_j = a_j·S_{j-1} + c_j⊗c_j, 读出 r_j = q_j·S_j, k=v=c (状态嵌入自身)
@@ -73,7 +76,10 @@ class MaxStateSuper(torch.nn.Module):
                     self.kv_beta_b = nn.Parameter(torch.full((heads,), 2.0))
 
         # v1/v2 为 4 路投影；v3 中 c 路改由 state_em 查表提供，故只需 3 路
-        self.combined = nn.Linear(dim_size, 3 * dim_size, bias=False)
+        if em_ref is not None:
+            self.combined = EmLinear(3 * dim_size, em_ref, 0, dim_size)
+        else:
+            self.combined = nn.Linear(dim_size, 3 * dim_size, bias=False)
 
         # 衰减参数（v3.1）：γ = exp(-softplus(c·v + b))，逐维、输入相关
         # 多尺度初始化：初始 γ 逐维 log 均匀散布；v3.2 扩展范围引入慢通道
@@ -271,6 +277,45 @@ class MaxStateSuper(torch.nn.Module):
         return term1 + term2 + term3 + term4 + c * e + combined
 
 
+class EmLinear(torch.nn.Module):
+    """Weight generated live from the embedding bank: W = A @ em.weight[lo:hi].
+    The em reference is held in a plain list (not a submodule) so parameters are
+    not duplicated; gradients flow into the shared embedding."""
+
+    def __init__(self, out_features, em, lo, hi, out_shape=None):
+        super().__init__()
+        R = out_shape[0] if out_shape else (hi - lo)
+        self.A = torch.nn.Parameter(torch.randn(out_features, R) / R ** 0.5)
+        self._em_ref = [em]
+        self.lo, self.hi = lo, hi
+        self.out_shape = out_shape
+
+    def forward(self, x):
+        w = self._em_ref[0].weight[self.lo:self.hi]
+        if self.out_shape is not None:
+            w = w.reshape(self.out_shape)
+        return torch.nn.functional.linear(x, self.A @ w)
+
+
+class EmFeedForward(torch.nn.Module):
+    """Gated FFN with all three matrices generated from embedding-derived bases."""
+
+    def __init__(self, hidden_size, ffn_hidden, em, act="silu"):
+        super().__init__()
+        R2 = hidden_size // 2
+        self.ffn1 = EmLinear(ffn_hidden, em, 0, hidden_size)
+        self.gate = EmLinear(ffn_hidden, em, 0, hidden_size)
+        self.ffn2 = EmLinear(hidden_size, em, hidden_size,
+                             hidden_size + R2 * ffn_hidden // hidden_size,
+                             out_shape=(R2, ffn_hidden))
+        self.act = {"relu": torch.nn.ReLU(), "silu": torch.nn.SiLU()}[act]
+
+    def forward(self, x):
+        x1 = self.ffn1(x)
+        x2 = self.act(self.gate(x))
+        return self.ffn2(x1 * x2)
+
+
 class FeedForward(torch.nn.Module):
     def __init__(self, hidden_size, act="relu"):
         super(FeedForward, self).__init__()
@@ -303,15 +348,22 @@ class DecoderLayer(torch.nn.Module):
                  state_rank=None, use_decay=True, pre_norm=False, ffn_act="relu",
                  decay_init=(0.001, 0.15), decay_v_std=0.0, kv_channel=False, kv_decay=0.98,
                  kv_norm_keys=False, kv_beta=False, kv_delta=False, kv_dim=None,
-                 kv_backend='sum', kv_beta_init=0.0, short_conv=False, conv_kernel=4, kv_beta_tok=False):
+                 kv_backend='sum', kv_beta_init=0.0, short_conv=False, conv_kernel=4, kv_beta_tok=False,
+                 em_ref=None, ffn_hidden=None):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
                                                    decay_init, decay_v_std,
                                                    kv_channel, kv_decay,
                                                    kv_norm_keys, kv_beta, kv_delta, kv_dim,
-                                                   kv_backend, kv_beta_init, kv_beta_tok)
-        self.ffn = FeedForward(hidden_size, ffn_act)
+                                                   kv_backend, kv_beta_init, kv_beta_tok,
+                                                   em_ref=em_ref)
+        if em_ref is not None:
+            # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
+            fh = ffn_hidden or hidden_size
+            self.ffn = EmFeedForward(hidden_size, fh, em_ref, ffn_act)
+        else:
+            self.ffn = FeedForward(hidden_size, ffn_act)
         self.layer_norm = torch.nn.LayerNorm(hidden_size)
         self.pre_norm = pre_norm
         if pre_norm:
@@ -420,12 +472,16 @@ class OpenASH_V3(torch.nn.Module):
                  use_fused=True, state_rank=64, ce_chunk=256, use_decay=True,
                  pre_norm=False, ffn_act="relu", decay_init=(0.001, 0.15), decay_v_std=0.0,
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False, kv_delta=False,
-                 kv_dim=None, kv_backend='sum', kv_beta_init=0.0, short_conv=False, kv_beta_tok=False):
+                 kv_dim=None, kv_backend='sum', kv_beta_init=0.0, short_conv=False, kv_beta_tok=False,
+                 em_weights=False, ffn_hidden=None):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
 
         self.em = torch.nn.Embedding(voc_size, hidden_size, padding_idx=0)
+
+        # v4.0: em 作为权重库——每层大权重 = A @ em 切片（与输入嵌入共享梯度），LM 头与 em 绑定
+        em_ref = self.em if em_weights else None
 
         # v3: 可学习位置编码（GPT-2 风格），补上 v1/v2 完全缺失的位置信息
         self.pos_em = torch.nn.Embedding(max_seq_len, hidden_size)
@@ -435,10 +491,16 @@ class OpenASH_V3(torch.nn.Module):
             [DecoderLayer(hidden_size, num_heads, voc_size, model_flag, use_fused, state_rank, use_decay,
                           pre_norm, ffn_act, decay_init, decay_v_std, kv_channel, kv_decay,
                           kv_norm_keys, kv_beta, kv_delta, kv_dim, kv_backend, kv_beta_init,
-                          short_conv, kv_beta_tok=kv_beta_tok)
+                          short_conv, kv_beta_tok=kv_beta_tok,
+                          em_ref=em_ref, ffn_hidden=ffn_hidden)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
-        self.head_score = nn.Linear(hidden_size, voc_size, bias=False)
+        self.em_weights_tied = em_weights
+        if em_weights:
+            self.head_score = None
+            self._head_weight = self.em.weight
+        else:
+            self.head_score = nn.Linear(hidden_size, voc_size, bias=False)
 
     def _hidden(self, x, state=None, pos_offset=0):
         """前向到最后一层隐藏态（不含 LM head）。"""
@@ -459,17 +521,19 @@ class OpenASH_V3(torch.nn.Module):
 
     def forward(self, x, state=None, pos_offset=0):
         x, state = self._hidden(x, state, pos_offset)
-        x_out = self.head_score(x)
-        return x_out, state
+        if self.em_weights_tied:
+            return x @ self._head_weight.t(), state
+        return self.head_score(x), state
 
     def forward_loss(self, ids, targets, state=None, pos_offset=0, fused_ce=True):
         """训练用：hidden → fused CE，跳过 [N, V] logits 物化。targets 为下一 token id。"""
         x, state = self._hidden(ids, state, pos_offset)
+        w = self._head_weight if self.em_weights_tied else self.head_score.weight
         if fused_ce:
-            loss = FusedCrossEntropy.apply(x.reshape(-1, x.shape[-1]), self.head_score.weight,
+            loss = FusedCrossEntropy.apply(x.reshape(-1, x.shape[-1]), w,
                                            targets.reshape(-1), self.ce_chunk)
         else:
-            logits = self.head_score(x)
+            logits = x @ w.t()
             loss = torch.nn.functional.cross_entropy(
                 logits.reshape(-1, logits.shape[-1]).float(), targets.reshape(-1))
         return loss, state
