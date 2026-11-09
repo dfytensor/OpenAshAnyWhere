@@ -40,7 +40,7 @@ class MaxStateSuper(torch.nn.Module):
                  decay_init=(0.001, 0.15), decay_v_std=0.0,
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False,
                  kv_delta=False, kv_dim=None, kv_backend='sum', kv_beta_init=0.0, kv_beta_tok=False,
-                 em_ref=None):
+                 em_ref=None, wkey_em=None):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -117,10 +117,24 @@ class MaxStateSuper(torch.nn.Module):
 
         self.head_linear = torch.nn.Linear(heads * 5, heads, bias=False)
 
+        # v4.1: token-id 查表驱动的 rank-1 权重调制通路（state_em 模式搬到值通路）
+        #   combined_out_t += iw_gate · a_t · <w2, x_t>，a_t = Pa(wkey_em[ids_t])
+        #   门零初始化 → 起点严格等价 v37；通路是否有用由训练决定
+        self.wkey_em = wkey_em
+        if wkey_em is not None:
+            self.iw_Pa = nn.Linear(wkey_em.weight.shape[1], dim_size, bias=False)
+            self.iw_w2 = nn.Parameter(torch.randn(dim_size) * 0.02)  # w2≠0：通路有信号；安全性由 gate=0 保证
+            self.iw_gate = nn.Parameter(torch.tensor(0.0))
+
     def forward(self, x, ids, state=None):
         b, s, d = x.shape
         # 布局 [b, s, 3, d_head, heads] → 各流 permute 为 [b, d_head, s, heads]（heads 连续，利于合并访问）
         combined = self.combined(x).view(b, s, 3, self.d_head, self.heads)
+        if self.wkey_em is not None:
+            # v4.1: token-id 查表 rank-1 权重调制（门零初始化，渐进启用）
+            a_t = self.iw_Pa(self.wkey_em(ids))                       # (B,S,D)
+            mod = (self.iw_gate * a_t * (x @ self.iw_w2).unsqueeze(-1))  # (B,S,D)
+            combined = combined + mod.view(b, s, 1, self.d_head, self.heads)
         out, out1, out3 = combined.unbind(2)
 
         out = out.permute(0, 2, 1, 3)
@@ -349,7 +363,7 @@ class DecoderLayer(torch.nn.Module):
                  decay_init=(0.001, 0.15), decay_v_std=0.0, kv_channel=False, kv_decay=0.98,
                  kv_norm_keys=False, kv_beta=False, kv_delta=False, kv_dim=None,
                  kv_backend='sum', kv_beta_init=0.0, short_conv=False, conv_kernel=4, kv_beta_tok=False,
-                 em_ref=None, ffn_hidden=None):
+                 em_ref=None, ffn_hidden=None, wkey_em=None):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
@@ -357,7 +371,7 @@ class DecoderLayer(torch.nn.Module):
                                                    kv_channel, kv_decay,
                                                    kv_norm_keys, kv_beta, kv_delta, kv_dim,
                                                    kv_backend, kv_beta_init, kv_beta_tok,
-                                                   em_ref=em_ref)
+                                                   em_ref=em_ref, wkey_em=wkey_em)
         if em_ref is not None:
             # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
             fh = ffn_hidden or hidden_size
@@ -473,12 +487,15 @@ class OpenASH_V3(torch.nn.Module):
                  pre_norm=False, ffn_act="relu", decay_init=(0.001, 0.15), decay_v_std=0.0,
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False, kv_delta=False,
                  kv_dim=None, kv_backend='sum', kv_beta_init=0.0, short_conv=False, kv_beta_tok=False,
-                 em_weights=False, ffn_hidden=None):
+                 em_weights=False, ffn_hidden=None, id_weight=False, wkey_rank=64):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
 
         self.em = torch.nn.Embedding(voc_size, hidden_size, padding_idx=0)
+        # v4.1: token-id 查表权重调制通路（state_em 模式；共享一张表服务所有层）
+        self.wkey_em = nn.Embedding(voc_size, wkey_rank) if id_weight else None
+        nn.init.normal_(self.wkey_em.weight, mean=0.0, std=0.02) if self.wkey_em is not None else None
 
         # v4.0: em 作为权重库——每层大权重 = A @ em 切片（与输入嵌入共享梯度），LM 头与 em 绑定
         em_ref = self.em if em_weights else None
@@ -492,7 +509,7 @@ class OpenASH_V3(torch.nn.Module):
                           pre_norm, ffn_act, decay_init, decay_v_std, kv_channel, kv_decay,
                           kv_norm_keys, kv_beta, kv_delta, kv_dim, kv_backend, kv_beta_init,
                           short_conv, kv_beta_tok=kv_beta_tok,
-                          em_ref=em_ref, ffn_hidden=ffn_hidden)
+                          em_ref=em_ref, ffn_hidden=ffn_hidden, wkey_em=self.wkey_em)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights
