@@ -1,0 +1,48 @@
+== bias=rope seed=4 steps=6000 bs=32 ctx=512 d=384 L=6 src=sub
+  sub stream: train 22,016,695 / val 1,158,774
+params 11,424,768  V=2048
+  step     1  loss 7.631  val 7.633  ppl 2064.28  [3s]
+  step   250  loss 3.843  val 3.840  ppl   46.54  [52s]
+  step   500  loss 3.370  val 3.384  ppl   29.50  [101s]
+  step   750  loss 3.307  val 3.157  ppl   23.51  [151s]
+  step  1000  loss 2.991  val 3.006  ppl   20.22  [201s]
+  step  1250  loss 2.867  val 2.902  ppl   18.21  [251s]
+  step  1500  loss 2.710  val 2.826  ppl   16.87  [301s]
+  step  1750  loss 2.732  val 2.743  ppl   15.54  [350s]
+  step  2000  loss 2.713  val 2.693  ppl   14.78  [400s]
+  step  2250  loss 2.558  val 2.632  ppl   13.90  [450s]
+  step  2500  loss 2.514  val 2.587  ppl   13.29  [500s]
+  step  2750  loss 2.435  val 2.546  ppl   12.76  [550s]
+  step  3000  loss 2.548  val 2.517  ppl   12.39  [600s]
+  step  3250  loss 2.487  val 2.482  ppl   11.96  [649s]
+  step  3500  loss 2.464  val 2.460  ppl   11.71  [699s]
+  step  3750  loss 2.438  val 2.441  ppl   11.48  [749s]
+  step  4000  loss 2.355  val 2.425  ppl   11.30  [799s]
+  step  4250  loss 2.355  val 2.400  ppl   11.02  [849s]
+  step  4500  loss 2.326  val 2.389  ppl   10.91  [899s]
+  step  4750  loss 2.274  val 2.386  ppl   10.87  [949s]
+  step  5000  loss 2.388  val 2.370  ppl   10.70  [999s]
+  step  5250  loss 2.271  val 2.366  ppl   10.65  [1049s]
+  step  5500  loss 2.275  val 2.359  ppl   10.58  [1098s]
+  step  5750  loss 2.287  val 2.353  ppl   10.52  [1148s]
+  step  6000  loss 2.127  val 2.349  ppl   10.47  [1198s]
+  [len-eval] ctx=512: loss 2.246 ppl 9.45 (B=8)
+  [len-eval] ctx=1024: loss 2.658 ppl 14.26 (B=8)
+  [len-eval] ctx=2048: loss 3.253 ppl 25.87 (B=8)
+{
+ "bias": "rope",
+ "seed": 4,
+ "steps": 6000,
+ "params": 11424768,
+ "final_val_loss": 2.348520199457804,
+ "best_val_loss": 2.348520199457804,
+ "final_ppl": 10.470064648003593,
+ "elapsed": 1198.0464253425598,
+ "ctx": 512,
+ "src": "sub",
+ "length_eval": {
+  "512": 2.246307849884033,
+  "1024": 2.657750368118286,
+  "2048": 3.2531139850616455
+ }
+}

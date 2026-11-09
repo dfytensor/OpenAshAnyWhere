@@ -40,7 +40,7 @@ class MaxStateSuper(torch.nn.Module):
                  decay_init=(0.001, 0.15), decay_v_std=0.0,
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False,
                  kv_delta=False, kv_dim=None, kv_backend='sum', kv_beta_init=0.0, kv_beta_tok=False,
-                 em_ref=None, wkey_em=None):
+                 em_ref=None, wkey_em=None, state_split=False):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -49,6 +49,11 @@ class MaxStateSuper(torch.nn.Module):
         self.model_flag = model_flag
         self.use_fused = use_fused
         self.use_decay = use_decay
+        # v4.2: state 三分化——MEM 头组零衰减永久记忆 + 多位读取（aux 读出混入）
+        self.state_split = state_split
+        if state_split:
+            self.o_read = nn.Parameter(torch.randn(heads, self.kv_dh, self.kv_dh) * 0.02)
+            self.o_mix = nn.Parameter(torch.full((heads,), 4.0))   # sigmoid≈0.98 主读出
         assert dim_size % heads == 0, "Dimension size must be divisible by head size."
         # v4.0: combined 投影由 em 变换得到（W = A @ em 切片，与输入嵌入共享梯度）
         self.em_ref = em_ref
@@ -212,6 +217,10 @@ class MaxStateSuper(torch.nn.Module):
                 else:
                     beta_f = torch.sigmoid(self.kv_beta_fla).view(1, 1, -1)\
                         .expand(bx, sx, self.heads).to(qq_f.dtype)
+                if self.state_split:
+                    # v4.2: MEM 头组（0:2）零衰减 + β=1 → 永久键值存储（永不遗忘）
+                    g_f = torch.cat([torch.zeros_like(g_f[..., 0:2]), g_f[..., 2:]], dim=-1)
+                    beta_f = torch.cat([torch.ones_like(beta_f[..., 0:2]), beta_f[..., 2:]], dim=-1)
                 if self.kv_backend == 'delta_chunk':
                     # v3.9: 自研分块实现（纯 torch，autograd 反向；test_delta_chunk.py 全 PASS）
                     from delta_chunk import chunked_delta_rule
@@ -224,6 +233,11 @@ class MaxStateSuper(torch.nn.Module):
                         initial_state=s_kv, output_final_state=True,
                         use_qk_l2norm_in_kernel=False)
                 # o (B,S,H,kv_dh) → gen_model 布局 (B,d_head,S,H)
+                if self.state_split:
+                    # v4.2: 多位读取——aux 读出（同记忆的不同读取视角），per-head 混合
+                    o_aux = torch.einsum('bshd,hde->bshe', o, self.o_read.to(o.dtype))
+                    mix = torch.sigmoid(self.o_mix).view(1, 1, -1, 1).to(o.dtype)
+                    o = mix * o + (1 - mix) * o_aux
                 o_p = o.permute(0, 3, 1, 2)                     # (B,kv_dh,S,H)
                 if self.kv_dh < self.d_head:
                     o_p = F.pad(o_p, (0, 0, 0, 0, 0, self.d_head - self.kv_dh))
@@ -242,12 +256,20 @@ class MaxStateSuper(torch.nn.Module):
                 else:
                     bd = torch.sigmoid(self.kv_beta_fla).view(1, -1).to(qq.dtype)  # (B,H)
                 sv = torch.einsum('bhd,bhdv->bhv', kd, s_kv.to(qq.dtype))
+                if self.state_split:
+                    # v4.2: MEM 头组（0:2）在解码侧同样强制零衰减 + β=1（与训练一致）
+                    a_step = torch.cat([torch.ones_like(a_step[..., 0:2]), a_step[..., 2:]], dim=-1)
+                    bd = torch.cat([torch.ones_like(bd[..., 0:2]), bd[..., 2:]], dim=-1)
                 # 锚定 FLA 单 token 语义：S ← a·S + k⊗(β·k − β·a·(kS))（衰减在读出前应用）
                 corr = kd - a_step.unsqueeze(-1) * sv                  # (B,H,D)
                 s_new = a_step[..., None, None] * s_kv.to(qq.dtype) \
                     + (kd * bd.unsqueeze(-1)).unsqueeze(-1) * corr.unsqueeze(-2)  # (B,H,D,V)
                 r = torch.einsum('bhd,bhdv->bhv', qq.to(qq.dtype).squeeze(2), s_new) \
                     * float(self.kv_dh) ** -0.5                         # 锚定 chunk_fwd_o scale
+                if self.state_split:
+                    r_aux = torch.einsum('bhd,hde->bhe', r, self.o_read.to(r.dtype))
+                    mix = torch.sigmoid(self.o_mix).view(1, -1, 1).to(r.dtype)
+                    r = mix * r + (1 - mix) * r_aux
                 s_kv_new = s_new
             elif s_kv is not None and sx == 1:
                 # 增量单步（O(1) 解码，sum 写入）：S ← a·S + k̂⊗k̂；r = q·S
@@ -330,12 +352,38 @@ class EmFeedForward(torch.nn.Module):
         return self.ffn2(x1 * x2)
 
 
+class MoEFeedForward(torch.nn.Module):
+    """Token-gated MoE-FFN: N gated-FFN experts, top-k routing (dense-compute,
+    masked-accumulate formulation — correct, simple; token-sorted dispatch is a
+    perf follow-up). Router zero-bias init -> near-uniform at start."""
+
+    def __init__(self, hidden_size, act="silu", num_experts=4, topk=2, expert_hidden=None):
+        super().__init__()
+        eh = expert_hidden or hidden_size
+        self.experts = torch.nn.ModuleList([FeedForward(hidden_size, act, ffn_hidden=eh) for _ in range(num_experts)])
+        self.router = torch.nn.Linear(hidden_size, num_experts)
+        self.topk = topk
+
+    def forward(self, x):
+        w = torch.softmax(self.router(x.float()), dim=-1)              # (B,S,N)
+        topv, topi = w.topk(self.topk, dim=-1)
+        topv = topv / (topv.sum(-1, keepdim=True) + 1e-9)
+        y = torch.zeros_like(x)
+        for e, expert in enumerate(self.experts):
+            msk = (topi == e).any(-1, keepdim=True).to(x.dtype)        # (B,S,1) selected tokens
+            wt = (topi == e).to(x.dtype) * topv                        # (B,S,k) this expert's weight
+            wt = wt.sum(-1, keepdim=True)                              # (B,S,1)
+            y = y + wt * expert(x * msk) * msk
+        return y
+
+
 class FeedForward(torch.nn.Module):
-    def __init__(self, hidden_size, act="relu"):
+    def __init__(self, hidden_size, act="relu", ffn_hidden=None):
         super(FeedForward, self).__init__()
-        self.ffn1 = torch.nn.Linear(hidden_size, hidden_size)
-        self.ffn2 = torch.nn.Linear(hidden_size, hidden_size)
-        self.gate = torch.nn.Linear(hidden_size, hidden_size)
+        fh = ffn_hidden or hidden_size
+        self.ffn1 = torch.nn.Linear(hidden_size, fh)
+        self.ffn2 = torch.nn.Linear(fh, hidden_size)
+        self.gate = torch.nn.Linear(hidden_size, fh)
 
         self.act = {"relu": torch.nn.ReLU(), "silu": torch.nn.SiLU()}[act]
 
@@ -363,7 +411,8 @@ class DecoderLayer(torch.nn.Module):
                  decay_init=(0.001, 0.15), decay_v_std=0.0, kv_channel=False, kv_decay=0.98,
                  kv_norm_keys=False, kv_beta=False, kv_delta=False, kv_dim=None,
                  kv_backend='sum', kv_beta_init=0.0, short_conv=False, conv_kernel=4, kv_beta_tok=False,
-                 em_ref=None, ffn_hidden=None, wkey_em=None):
+                 em_ref=None, ffn_hidden=None, wkey_em=None, moe_ffn=False,
+                 state_split=False):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
@@ -371,11 +420,15 @@ class DecoderLayer(torch.nn.Module):
                                                    kv_channel, kv_decay,
                                                    kv_norm_keys, kv_beta, kv_delta, kv_dim,
                                                    kv_backend, kv_beta_init, kv_beta_tok,
-                                                   em_ref=em_ref, wkey_em=wkey_em)
+                                                   em_ref=em_ref, wkey_em=wkey_em,
+                                                   state_split=state_split)
         if em_ref is not None:
             # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
             fh = ffn_hidden or hidden_size
             self.ffn = EmFeedForward(hidden_size, fh, em_ref, ffn_act)
+        elif moe_ffn:
+            self.ffn = MoEFeedForward(hidden_size, ffn_act, num_experts=4, topk=2,
+                                      expert_hidden=hidden_size // 2)
         else:
             self.ffn = FeedForward(hidden_size, ffn_act)
         self.layer_norm = torch.nn.LayerNorm(hidden_size)
@@ -487,7 +540,8 @@ class OpenASH_V3(torch.nn.Module):
                  pre_norm=False, ffn_act="relu", decay_init=(0.001, 0.15), decay_v_std=0.0,
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False, kv_delta=False,
                  kv_dim=None, kv_backend='sum', kv_beta_init=0.0, short_conv=False, kv_beta_tok=False,
-                 em_weights=False, ffn_hidden=None, id_weight=False, wkey_rank=64):
+                 em_weights=False, ffn_hidden=None, id_weight=False, wkey_rank=64,
+                 moe_ffn=False, state_split=False):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -509,7 +563,8 @@ class OpenASH_V3(torch.nn.Module):
                           pre_norm, ffn_act, decay_init, decay_v_std, kv_channel, kv_decay,
                           kv_norm_keys, kv_beta, kv_delta, kv_dim, kv_backend, kv_beta_init,
                           short_conv, kv_beta_tok=kv_beta_tok,
-                          em_ref=em_ref, ffn_hidden=ffn_hidden, wkey_em=self.wkey_em)
+                          em_ref=em_ref, ffn_hidden=ffn_hidden, wkey_em=self.wkey_em,
+                          moe_ffn=moe_ffn, state_split=state_split)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights

@@ -1,0 +1,90 @@
+﻿data: tokens 6,404,021 | train windows 6,203,637 | val windows 199,616 | crop len 384
+词表大小 23003
+代理词表大小 2094
+python.exe : Building prefix dict from the default dictionary ...
+所在位置 行:1 字符: 1
++ & ".venv\Scripts\python.exe" -u train_minimind_v3.py --steps 2500 --b ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Building prefix... dictionary ...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Loading model from cache C:\Users\Administrator\AppData\Local\Temp\jieba.cache
+Loading model cost 0.777 seconds.
+Prefix dict has been built successfully.
+model params: 96,501,564
+step     1 | loss 17.169 | lr 2.00e-06 | 5017 ms/step
+step    50 | loss 8.724 | lr 1.00e-04 | 1180 ms/step
+step   100 | loss 6.026 | lr 2.00e-04 | 1034 ms/step
+step   150 | loss 5.708 | lr 3.00e-04 | 987 ms/step
+step   200 | loss 5.280 | lr 3.00e-04 | 961 ms/step
+step   250 | loss 5.145 | lr 2.99e-04 | 947 ms/step
+step   300 | loss 4.849 | lr 2.97e-04 | 936 ms/step
+step   350 | loss 4.829 | lr 2.95e-04 | 919 ms/step
+step   400 | loss 4.805 | lr 2.93e-04 | 914 ms/step
+step   450 | loss 4.757 | lr 2.89e-04 | 917 ms/step
+step   500 | loss 4.552 | lr 2.85e-04 | 920 ms/step
+remark: triton_ops.py:52:0: 73 instructions in function
+remark: triton_ops.py:94:0: 115 instructions in function
+remark: triton_ops.py:306:0: 1978 instructions in function
+  >> val loss 4.838 | ppl 126.27
+step   550 | loss 4.639 | lr 2.81e-04 | 948 ms/step
+step   600 | loss 4.521 | lr 2.76e-04 | 941 ms/step
+step   650 | loss 4.524 | lr 2.71e-04 | 936 ms/step
+step   700 | loss 4.401 | lr 2.65e-04 | 933 ms/step
+step   750 | loss 4.452 | lr 2.59e-04 | 930 ms/step
+step   800 | loss 4.581 | lr 2.52e-04 | 927 ms/step
+step   850 | loss 4.510 | lr 2.45e-04 | 922 ms/step
+step   900 | loss 4.465 | lr 2.38e-04 | 919 ms/step
+step   950 | loss 4.502 | lr 2.30e-04 | 918 ms/step
+step  1000 | loss 4.476 | lr 2.22e-04 | 913 ms/step
+  >> val loss 4.653 | ppl 104.88
+step  1050 | loss 4.353 | lr 2.14e-04 | 928 ms/step
+step  1100 | loss 4.452 | lr 2.05e-04 | 926 ms/step
+step  1150 | loss 4.279 | lr 1.96e-04 | 925 ms/step
+step  1200 | loss 4.297 | lr 1.87e-04 | 922 ms/step
+step  1250 | loss 4.245 | lr 1.79e-04 | 918 ms/step
+step  1300 | loss 4.267 | lr 1.70e-04 | 915 ms/step
+step  1350 | loss 4.275 | lr 1.60e-04 | 911 ms/step
+step  1400 | loss 4.196 | lr 1.51e-04 | 908 ms/step
+step  1450 | loss 4.234 | lr 1.43e-04 | 906 ms/step
+step  1500 | loss 4.240 | lr 1.34e-04 | 903 ms/step
+  >> val loss 4.545 | ppl 94.14
+step  1550 | loss 4.297 | lr 1.25e-04 | 914 ms/step
+step  1600 | loss 4.191 | lr 1.16e-04 | 911 ms/step
+step  1650 | loss 4.170 | lr 1.08e-04 | 910 ms/step
+step  1700 | loss 4.269 | lr 1.00e-04 | 909 ms/step
+step  1750 | loss 4.142 | lr 9.24e-05 | 907 ms/step
+step  1800 | loss 4.209 | lr 8.49e-05 | 905 ms/step
+step  1850 | loss 4.168 | lr 7.78e-05 | 904 ms/step
+step  1900 | loss 4.179 | lr 7.11e-05 | 903 ms/step
+step  1950 | loss 4.107 | lr 6.49e-05 | 902 ms/step
+step  2000 | loss 4.105 | lr 5.91e-05 | 902 ms/step
+  >> val loss 4.472 | ppl 87.52
+step  2050 | loss 4.047 | lr 5.37e-05 | 910 ms/step
+step  2100 | loss 4.063 | lr 4.88e-05 | 910 ms/step
+step  2150 | loss 4.200 | lr 4.45e-05 | 909 ms/step
+step  2200 | loss 4.041 | lr 4.07e-05 | 909 ms/step
+step  2250 | loss 4.157 | lr 3.75e-05 | 907 ms/step
+step  2300 | loss 4.136 | lr 3.48e-05 | 907 ms/step
+step  2350 | loss 4.026 | lr 3.27e-05 | 906 ms/step
+step  2400 | loss 4.055 | lr 3.12e-05 | 904 ms/step
+step  2450 | loss 4.049 | lr 3.03e-05 | 904 ms/step
+step  2500 | loss 4.112 | lr 3.00e-05 | 902 ms/step
+  >> val loss 4.440 | ppl 84.78
+
+[生成样本]
+remark: triton_ops.py:52:0: 70 instructions in function
+remark: triton_ops.py:94:0: 110 instructions in function
+remark: triton_ops.py:306:0: 1669 instructions in function
+remark: triton_ops.py:52:0: 69 instructions in function
+remark: triton_ops.py:94:0: 115 instructions in function
+remark: triton_ops.py:306:0: 1636 instructions in function
+remark: triton_ops.py:94:0: 115 instructions in function
+  [人工智能是] -> 人工智能是利用人工智能可以为公司名称：1. 节日了2. 将为我对音乐，因此，但也有8. 面包- 失望。3. - 将为他们的应用的问题。2. - 芝士，并将以下是在未来的工作。根据最新的小学
+remark: triton_ops.py:94:0: 110 instructions in function
+remark: triton_ops.py:306:0: 1669 instructions in function
+  [中国的首都是] -> 中国的首都是一个很化学键，可以在一起。好的，然后，可以使用泰勒游泳，那么他情节和LOGO。你能不能进行详细的，你可以使用？当然。他的，你的，让我推荐的。在一起的床上，我可以。这些电影的
+  [春天来了，] -> 春天来了，并没有早上，并且可以让你提供一些爱情的口味。写的，我是，但是在一个笑话的à着我将它的区间利用。当然，你的爱情主题是人类的微笑着浪漫去追求自己独特的海鲜了他在一起，她是一些关于旅行
+  [中国经济] -> 中国经济的段落分别为山区。我可以被称为“你的奇特的“你在紧凑，它们都会有什么？是周末的地理位置，请告诉我是一个哪种米？”。"他，但如果您可以看一些有关。这是一个总的来说在北京的意思。好的
+
+checkpoint/log/samples -> minimind_v30_pure/

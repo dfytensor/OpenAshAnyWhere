@@ -1,0 +1,59 @@
+sft windows: 21,640,776
+[v35] base loaded | missing=0 unexpected=0
+[sft] step     1 | loss 3.216 | lr 6.67e-07 | 1378 ms/step
+[sft] step   100 | loss 2.403 | lr 6.67e-05 | 330 ms/step
+[sft] step   200 | loss 2.066 | lr 1.00e-04 | 324 ms/step
+[sft] step   300 | loss 2.034 | lr 9.98e-05 | 321 ms/step
+[sft] step   400 | loss 1.931 | lr 9.94e-05 | 321 ms/step
+[sft] step   500 | loss 1.857 | lr 9.88e-05 | 320 ms/step
+[sft] step   600 | loss 1.859 | lr 9.81e-05 | 320 ms/step
+[sft] step   700 | loss 1.782 | lr 9.72e-05 | 319 ms/step
+[sft] step   800 | loss 1.696 | lr 9.61e-05 | 319 ms/step
+[sft] step   900 | loss 1.771 | lr 9.48e-05 | 318 ms/step
+[sft] step  1000 | loss 1.654 | lr 9.33e-05 | 318 ms/step
+[sft]   >> sft val 1.6708 | ppl 5.32
+[sft] step  1100 | loss 1.673 | lr 9.17e-05 | 318 ms/step
+[sft] step  1200 | loss 1.682 | lr 9.00e-05 | 318 ms/step
+[sft] step  1300 | loss 1.717 | lr 8.81e-05 | 317 ms/step
+[sft] step  1400 | loss 1.658 | lr 8.60e-05 | 317 ms/step
+[sft] step  1500 | loss 1.558 | lr 8.39e-05 | 317 ms/step
+[sft] step  1600 | loss 1.591 | lr 8.16e-05 | 317 ms/step
+[sft] step  1700 | loss 1.561 | lr 7.92e-05 | 316 ms/step
+[sft] step  1800 | loss 1.545 | lr 7.67e-05 | 316 ms/step
+[sft] step  1900 | loss 1.437 | lr 7.41e-05 | 316 ms/step
+[sft] step  2000 | loss 1.594 | lr 7.14e-05 | 316 ms/step
+[sft]   >> sft val 1.5212 | ppl 4.58
+[sft] step  2100 | loss 1.595 | lr 6.86e-05 | 316 ms/step
+[sft] step  2200 | loss 1.454 | lr 6.58e-05 | 316 ms/step
+[sft] step  2300 | loss 1.453 | lr 6.30e-05 | 316 ms/step
+[sft] step  2400 | loss 1.484 | lr 6.01e-05 | 315 ms/step
+[sft] step  2500 | loss 1.493 | lr 5.72e-05 | 316 ms/step
+[sft] step  2600 | loss 1.545 | lr 5.43e-05 | 315 ms/step
+[sft] step  2700 | loss 1.405 | lr 5.14e-05 | 316 ms/step
+[sft] step  2800 | loss 1.494 | lr 4.85e-05 | 316 ms/step
+[sft] step  2900 | loss 1.438 | lr 4.56e-05 | 316 ms/step
+[sft] step  3000 | loss 1.508 | lr 4.28e-05 | 316 ms/step
+[sft]   >> sft val 1.4424 | ppl 4.23
+[sft] step  3100 | loss 1.496 | lr 4.00e-05 | 316 ms/step
+[sft] step  3200 | loss 1.398 | lr 3.73e-05 | 316 ms/step
+[sft] step  3300 | loss 1.465 | lr 3.46e-05 | 316 ms/step
+[sft] step  3400 | loss 1.511 | lr 3.21e-05 | 316 ms/step
+[sft] step  3500 | loss 1.503 | lr 2.96e-05 | 316 ms/step
+[sft] step  3600 | loss 1.497 | lr 2.73e-05 | 316 ms/step
+[sft] step  3700 | loss 1.424 | lr 2.50e-05 | 316 ms/step
+[sft] step  3800 | loss 1.465 | lr 2.29e-05 | 316 ms/step
+[sft] step  3900 | loss 1.424 | lr 2.09e-05 | 316 ms/step
+[sft] step  4000 | loss 1.421 | lr 1.91e-05 | 316 ms/step
+[sft]   >> sft val 1.4018 | ppl 4.06
+[sft] step  4100 | loss 1.316 | lr 1.74e-05 | 316 ms/step
+[sft] step  4200 | loss 1.380 | lr 1.59e-05 | 316 ms/step
+[sft] step  4300 | loss 1.489 | lr 1.45e-05 | 316 ms/step
+[sft] step  4400 | loss 1.469 | lr 1.34e-05 | 316 ms/step
+[sft] step  4500 | loss 1.321 | lr 1.23e-05 | 316 ms/step
+[sft] step  4600 | loss 1.263 | lr 1.15e-05 | 316 ms/step
+[sft] step  4700 | loss 1.481 | lr 1.08e-05 | 316 ms/step
+[sft] step  4800 | loss 1.471 | lr 1.04e-05 | 316 ms/step
+[sft] step  4900 | loss 1.420 | lr 1.01e-05 | 316 ms/step
+[sft] step  5000 | loss 1.420 | lr 1.00e-05 | 316 ms/step
+[sft]   >> sft val 1.3847 | ppl 3.99
+[sft] done -> F:\OpenASH2605\sft_v35/

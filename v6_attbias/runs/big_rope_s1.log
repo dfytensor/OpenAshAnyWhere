@@ -1,0 +1,76 @@
+== bias=rope seed=1 steps=15000 bs=16 ctx=512 d=768 L=12 src=sub
+  sub stream: train 54,668,717 / val 2,877,301
+params 86,592,000  V=2048
+  step     1  loss 7.755  val 7.771  ppl 2370.08  [10s]
+  step   250  loss 4.006  val 3.961  ppl   52.52  [106s]
+  step   500  loss 3.465  val 3.574  ppl   35.66  [201s]
+  step   750  loss 3.185  val 3.361  ppl   28.83  [297s]
+  step  1000  loss 3.165  val 3.223  ppl   25.11  [393s]
+  step  1250  loss 2.971  val 3.101  ppl   22.22  [489s]
+  step  1500  loss 2.770  val 3.020  ppl   20.49  [584s]
+  step  1750  loss 2.798  val 2.927  ppl   18.67  [680s]
+  step  2000  loss 2.729  val 2.855  ppl   17.37  [776s]
+  step  2250  loss 2.618  val 2.779  ppl   16.10  [871s]
+  step  2500  loss 2.437  val 2.728  ppl   15.31  [967s]
+  step  2750  loss 2.598  val 2.696  ppl   14.82  [1063s]
+  step  3000  loss 2.649  val 2.659  ppl   14.28  [1158s]
+  step  3250  loss 2.341  val 2.636  ppl   13.96  [1254s]
+  step  3500  loss 2.616  val 2.607  ppl   13.56  [1350s]
+  step  3750  loss 2.533  val 2.570  ppl   13.07  [1445s]
+  step  4000  loss 2.363  val 2.559  ppl   12.92  [1541s]
+  step  4250  loss 2.554  val 2.546  ppl   12.76  [1637s]
+  step  4500  loss 2.238  val 2.524  ppl   12.48  [1733s]
+  step  4750  loss 2.361  val 2.510  ppl   12.30  [1829s]
+  step  5000  loss 2.253  val 2.499  ppl   12.17  [1925s]
+  step  5250  loss 2.380  val 2.484  ppl   11.99  [2021s]
+  step  5500  loss 2.351  val 2.465  ppl   11.77  [2117s]
+  step  5750  loss 2.267  val 2.453  ppl   11.62  [2213s]
+  step  6000  loss 2.364  val 2.438  ppl   11.45  [2310s]
+  step  6250  loss 2.159  val 2.427  ppl   11.33  [2406s]
+  step  6500  loss 2.149  val 2.427  ppl   11.32  [2502s]
+  step  6750  loss 2.198  val 2.410  ppl   11.13  [2598s]
+  step  7000  loss 2.267  val 2.409  ppl   11.12  [2694s]
+  step  7250  loss 2.031  val 2.390  ppl   10.91  [2790s]
+  step  7500  loss 2.142  val 2.380  ppl   10.81  [2886s]
+  step  7750  loss 2.221  val 2.370  ppl   10.70  [2982s]
+  step  8000  loss 2.217  val 2.362  ppl   10.62  [3078s]
+  step  8250  loss 2.083  val 2.348  ppl   10.47  [3175s]
+  step  8500  loss 2.114  val 2.350  ppl   10.49  [3271s]
+  step  8750  loss 2.057  val 2.344  ppl   10.43  [3367s]
+  step  9000  loss 2.100  val 2.342  ppl   10.40  [3463s]
+  step  9250  loss 2.063  val 2.324  ppl   10.22  [3559s]
+  step  9500  loss 2.166  val 2.327  ppl   10.25  [3655s]
+  step  9750  loss 1.901  val 2.314  ppl   10.11  [3751s]
+  step 10000  loss 2.280  val 2.313  ppl   10.10  [3847s]
+  step 10250  loss 1.921  val 2.309  ppl   10.07  [3943s]
+  step 10500  loss 1.952  val 2.307  ppl   10.04  [4039s]
+  step 10750  loss 2.147  val 2.295  ppl    9.92  [4135s]
+  step 11000  loss 1.922  val 2.294  ppl    9.91  [4231s]
+  step 11250  loss 1.933  val 2.282  ppl    9.80  [4327s]
+  step 11500  loss 2.133  val 2.283  ppl    9.81  [4423s]
+  step 11750  loss 1.889  val 2.276  ppl    9.74  [4519s]
+  step 12000  loss 1.932  val 2.279  ppl    9.77  [4615s]
+  step 12250  loss 1.846  val 2.275  ppl    9.73  [4712s]
+  step 12500  loss 1.952  val 2.270  ppl    9.68  [4808s]
+  step 12750  loss 1.777  val 2.265  ppl    9.63  [4905s]
+  step 13000  loss 1.965  val 2.266  ppl    9.64  [5001s]
+  step 13250  loss 2.014  val 2.258  ppl    9.56  [5098s]
+  step 13500  loss 1.973  val 2.261  ppl    9.59  [5195s]
+  step 13750  loss 2.039  val 2.259  ppl    9.57  [5265s]
+  step 14000  loss 1.969  val 2.255  ppl    9.53  [5327s]
+  step 14250  loss 2.066  val 2.259  ppl    9.57  [5388s]
+  step 14500  loss 1.947  val 2.257  ppl    9.55  [5449s]
+  step 14750  loss 2.075  val 2.259  ppl    9.57  [5510s]
+  step 15000  loss 1.964  val 2.250  ppl    9.49  [5572s]
+{
+ "bias": "rope",
+ "seed": 1,
+ "steps": 15000,
+ "params": 86592000,
+ "final_val_loss": 2.250239372253418,
+ "best_val_loss": 2.250239372253418,
+ "final_ppl": 9.490007208906446,
+ "elapsed": 5572.492658138275,
+ "ctx": 512,
+ "src": "sub"
+}

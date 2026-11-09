@@ -1,0 +1,35 @@
+[v35] params: 104,796,936
+[v35] step     1 | loss 10.223 | lr 1.00e-06 | 1818 ms/step
+[v35] step   100 | loss 8.165 | lr 1.00e-04 | 308 ms/step
+[v35] step   200 | loss 5.548 | lr 2.00e-04 | 295 ms/step
+[v35] step   300 | loss 4.902 | lr 3.00e-04 | 292 ms/step
+[v35] step   400 | loss 4.624 | lr 2.99e-04 | 289 ms/step
+[v35] step   500 | loss 4.361 | lr 2.96e-04 | 289 ms/step
+[v35] step   600 | loss 4.530 | lr 2.92e-04 | 286 ms/step
+[v35] step   700 | loss 4.307 | lr 2.86e-04 | 285 ms/step
+[v35] step   800 | loss 4.174 | lr 2.78e-04 | 284 ms/step
+[v35] step   900 | loss 4.323 | lr 2.68e-04 | 283 ms/step
+[v35] step  1000 | loss 4.180 | lr 2.58e-04 | 282 ms/step
+[v35] step  1100 | loss 3.831 | lr 2.46e-04 | 281 ms/step
+[v35] step  1200 | loss 3.925 | lr 2.32e-04 | 281 ms/step
+[v35] step  1300 | loss 3.700 | lr 2.18e-04 | 280 ms/step
+[v35] step  1400 | loss 3.716 | lr 2.04e-04 | 280 ms/step
+[v35] step  1500 | loss 3.976 | lr 1.88e-04 | 280 ms/step
+[v35] step  1600 | loss 3.817 | lr 1.73e-04 | 279 ms/step
+[v35] step  1700 | loss 3.839 | lr 1.57e-04 | 279 ms/step
+[v35] step  1800 | loss 3.878 | lr 1.42e-04 | 279 ms/step
+[v35] step  1900 | loss 3.680 | lr 1.26e-04 | 279 ms/step
+[v35] step  2000 | loss 3.686 | lr 1.12e-04 | 279 ms/step
+[v35]   >> val 3.4937 | ppl 32.91
+[v35] step  2100 | loss 3.610 | lr 9.75e-05 | 279 ms/step
+[v35] step  2200 | loss 3.485 | lr 8.44e-05 | 279 ms/step
+[v35] step  2300 | loss 3.449 | lr 7.24e-05 | 279 ms/step
+[v35] step  2400 | loss 3.607 | lr 6.16e-05 | 278 ms/step
+[v35] step  2500 | loss 3.592 | lr 5.22e-05 | 278 ms/step
+[v35] step  2600 | loss 3.620 | lr 4.44e-05 | 278 ms/step
+[v35] step  2700 | loss 3.390 | lr 3.81e-05 | 278 ms/step
+[v35] step  2800 | loss 3.424 | lr 3.36e-05 | 278 ms/step
+[v35] step  2900 | loss 3.429 | lr 3.09e-05 | 278 ms/step
+[v35] step  3000 | loss 3.459 | lr 3.00e-05 | 278 ms/step
+[v35]   >> val 3.3465 | ppl 28.40
+[v35] done -> F:\OpenASH2605\big_v35_3k/

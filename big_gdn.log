@@ -1,0 +1,141 @@
+[gdn] params: 106,293,052
+[gdn] step     1 | loss 10.187 | lr 1.00e-06 | 1405 ms/step
+[gdn] step   100 | loss 6.529 | lr 1.00e-04 | 86 ms/step
+[gdn] step   200 | loss 5.973 | lr 2.00e-04 | 79 ms/step
+[gdn] step   300 | loss 5.151 | lr 3.00e-04 | 77 ms/step
+[gdn] step   400 | loss 5.239 | lr 3.00e-04 | 76 ms/step
+[gdn] step   500 | loss 5.423 | lr 2.99e-04 | 75 ms/step
+[gdn] step   600 | loss 5.082 | lr 2.98e-04 | 75 ms/step
+[gdn] step   700 | loss 4.709 | lr 2.97e-04 | 75 ms/step
+[gdn] step   800 | loss 4.345 | lr 2.95e-04 | 74 ms/step
+[gdn] step   900 | loss 4.671 | lr 2.93e-04 | 74 ms/step
+[gdn] step  1000 | loss 4.539 | lr 2.90e-04 | 74 ms/step
+[gdn] step  1100 | loss 4.874 | lr 2.87e-04 | 74 ms/step
+[gdn] step  1200 | loss 4.514 | lr 2.84e-04 | 74 ms/step
+[gdn] step  1300 | loss 4.486 | lr 2.80e-04 | 74 ms/step
+[gdn] step  1400 | loss 4.470 | lr 2.76e-04 | 74 ms/step
+[gdn] step  1500 | loss 4.627 | lr 2.72e-04 | 74 ms/step
+[gdn] step  1600 | loss 4.398 | lr 2.67e-04 | 73 ms/step
+[gdn] step  1700 | loss 4.378 | lr 2.62e-04 | 73 ms/step
+[gdn] step  1800 | loss 4.574 | lr 2.56e-04 | 73 ms/step
+[gdn] step  1900 | loss 4.149 | lr 2.51e-04 | 73 ms/step
+[gdn] step  2000 | loss 4.609 | lr 2.45e-04 | 73 ms/step
+remark: ops.py:51:0: 244 instructions in function
+remark: ops.py:51:0: 177 instructions in function
+remark: ops.py:51:0: 147 instructions in function
+remark: ops.py:51:0: 134 instructions in function
+remark: ops.py:51:0: 397 instructions in function
+remark: ops.py:51:0: 243 instructions in function
+remark: ops.py:51:0: 178 instructions in function
+remark: ops.py:51:0: 147 instructions in function
+remark: ops.py:51:0: 707 instructions in function
+remark: ops.py:51:0: 405 instructions in function
+remark: ops.py:51:0: 250 instructions in function
+remark: ops.py:51:0: 188 instructions in function
+remark: ops.py:51:0: 1315 instructions in function
+remark: ops.py:51:0: 715 instructions in function
+remark: ops.py:51:0: 418 instructions in function
+remark: ops.py:51:0: 263 instructions in function
+remark: ops.py:529:0: 125 instructions in function
+remark: ops.py:51:0: 244 instructions in function
+remark: ops.py:51:0: 177 instructions in function
+remark: ops.py:51:0: 147 instructions in function
+remark: ops.py:51:0: 134 instructions in function
+remark: ops.py:51:0: 397 instructions in function
+remark: ops.py:51:0: 243 instructions in function
+remark: ops.py:51:0: 178 instructions in function
+remark: ops.py:51:0: 147 instructions in function
+remark: ops.py:51:0: 707 instructions in function
+remark: ops.py:51:0: 405 instructions in function
+remark: ops.py:51:0: 250 instructions in function
+remark: ops.py:51:0: 188 instructions in function
+remark: ops.py:51:0: 1315 instructions in function
+remark: ops.py:51:0: 715 instructions in function
+remark: ops.py:51:0: 418 instructions in function
+remark: ops.py:51:0: 263 instructions in function
+remark: l2norm.py:69:0: 462 instructions in function
+remark: l2norm.py:69:0: 896 instructions in function
+remark: l2norm.py:69:0: 1760 instructions in function
+remark: l2norm.py:69:0: 3497 instructions in function
+remark: l2norm.py:69:0: 6969 instructions in function
+remark: l2norm.py:69:0: 263 instructions in function
+remark: l2norm.py:69:0: 491 instructions in function
+remark: l2norm.py:69:0: 948 instructions in function
+remark: l2norm.py:69:0: 1964 instructions in function
+remark: l2norm.py:69:0: 4004 instructions in function
+remark: l2norm.py:69:0: 147 instructions in function
+remark: l2norm.py:69:0: 262 instructions in function
+remark: l2norm.py:69:0: 488 instructions in function
+remark: l2norm.py:69:0: 951 instructions in function
+remark: l2norm.py:69:0: 1962 instructions in function
+remark: l2norm.py:69:0: 88 instructions in function
+remark: l2norm.py:69:0: 148 instructions in function
+remark: l2norm.py:69:0: 261 instructions in function
+remark: l2norm.py:69:0: 495 instructions in function
+remark: l2norm.py:69:0: 953 instructions in function
+remark: l2norm.py:69:0: 80 instructions in function
+remark: l2norm.py:69:0: 88 instructions in function
+remark: l2norm.py:69:0: 147 instructions in function
+remark: l2norm.py:69:0: 266 instructions in function
+remark: l2norm.py:69:0: 496 instructions in function
+remark: chunk_delta_h.py:59:0: 1959 instructions in function
+remark: chunk_delta_h.py:59:0: 3291 instructions in function
+remark: chunk_delta_h.py:59:0: 1625 instructions in function
+remark: chunk_delta_h.py:59:0: 3029 instructions in function
+remark: chunk_delta_h.py:59:0: 1202 instructions in function
+remark: chunk_delta_h.py:59:0: 1789 instructions in function
+remark: chunk_delta_h.py:59:0: 999 instructions in function
+remark: chunk_delta_h.py:59:0: 1630 instructions in function
+remark: fused_norm_gate.py:36:0: 1109 instructions in function
+remark: fused_norm_gate.py:36:0: 588 instructions in function
+remark: fused_norm_gate.py:36:0: 342 instructions in function
+remark: fused_norm_gate.py:36:0: 2151 instructions in function
+remark: fused_norm_gate.py:36:0: 1116 instructions in function
+remark: fused_norm_gate.py:36:0: 607 instructions in function
+remark: fused_norm_gate.py:36:0: 4341 instructions in function
+remark: fused_norm_gate.py:36:0: 2159 instructions in function
+remark: fused_norm_gate.py:36:0: 1131 instructions in function
+[gdn]   >> val 3.4068 | ppl 30.17
+[gdn] step  2100 | loss 4.153 | lr 2.39e-04 | 102 ms/step
+[gdn] step  2200 | loss 3.897 | lr 2.32e-04 | 101 ms/step
+[gdn] step  2300 | loss 4.041 | lr 2.26e-04 | 100 ms/step
+[gdn] step  2400 | loss 4.061 | lr 2.19e-04 | 99 ms/step
+[gdn] step  2500 | loss 4.224 | lr 2.12e-04 | 98 ms/step
+[gdn] step  2600 | loss 3.636 | lr 2.05e-04 | 97 ms/step
+[gdn] step  2700 | loss 3.924 | lr 1.98e-04 | 96 ms/step
+[gdn] step  2800 | loss 3.875 | lr 1.91e-04 | 95 ms/step
+[gdn] step  2900 | loss 4.326 | lr 1.84e-04 | 94 ms/step
+[gdn] step  3000 | loss 4.253 | lr 1.76e-04 | 93 ms/step
+[gdn] step  3100 | loss 3.765 | lr 1.69e-04 | 93 ms/step
+[gdn] step  3200 | loss 4.265 | lr 1.61e-04 | 92 ms/step
+[gdn] step  3300 | loss 3.887 | lr 1.54e-04 | 92 ms/step
+[gdn] step  3400 | loss 3.959 | lr 1.46e-04 | 91 ms/step
+[gdn] step  3500 | loss 3.783 | lr 1.39e-04 | 91 ms/step
+[gdn] step  3600 | loss 3.787 | lr 1.32e-04 | 90 ms/step
+[gdn] step  3700 | loss 3.563 | lr 1.25e-04 | 90 ms/step
+[gdn] step  3800 | loss 4.005 | lr 1.18e-04 | 89 ms/step
+[gdn] step  3900 | loss 3.701 | lr 1.11e-04 | 89 ms/step
+[gdn] step  4000 | loss 4.060 | lr 1.04e-04 | 88 ms/step
+[gdn]   >> val 3.1598 | ppl 23.57
+[gdn] step  4100 | loss 3.562 | lr 9.75e-05 | 88 ms/step
+[gdn] step  4200 | loss 3.552 | lr 9.12e-05 | 88 ms/step
+[gdn] step  4300 | loss 3.917 | lr 8.50e-05 | 87 ms/step
+[gdn] step  4400 | loss 3.898 | lr 7.92e-05 | 87 ms/step
+[gdn] step  4500 | loss 3.748 | lr 7.36e-05 | 87 ms/step
+[gdn] step  4600 | loss 3.560 | lr 6.82e-05 | 86 ms/step
+[gdn] step  4700 | loss 3.896 | lr 6.32e-05 | 86 ms/step
+[gdn] step  4800 | loss 3.527 | lr 5.85e-05 | 86 ms/step
+[gdn] step  4900 | loss 3.706 | lr 5.41e-05 | 86 ms/step
+[gdn] step  5000 | loss 3.759 | lr 5.00e-05 | 85 ms/step
+[gdn] step  5100 | loss 4.006 | lr 4.63e-05 | 85 ms/step
+[gdn] step  5200 | loss 3.859 | lr 4.29e-05 | 85 ms/step
+[gdn] step  5300 | loss 4.049 | lr 3.99e-05 | 85 ms/step
+[gdn] step  5400 | loss 3.465 | lr 3.73e-05 | 84 ms/step
+[gdn] step  5500 | loss 3.679 | lr 3.51e-05 | 84 ms/step
+[gdn] step  5600 | loss 3.580 | lr 3.33e-05 | 84 ms/step
+[gdn] step  5700 | loss 3.768 | lr 3.18e-05 | 84 ms/step
+[gdn] step  5800 | loss 3.888 | lr 3.08e-05 | 84 ms/step
+[gdn] step  5900 | loss 3.724 | lr 3.02e-05 | 83 ms/step
+[gdn] step  6000 | loss 3.823 | lr 3.00e-05 | 83 ms/step
+[gdn]   >> val 3.0589 | ppl 21.30
+[gdn] done -> F:\OpenASH2605\big_gdn/

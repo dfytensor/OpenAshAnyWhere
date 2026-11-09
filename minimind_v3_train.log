@@ -1,0 +1,200 @@
+﻿python.exe : Building prefix dict from the default dictionary ...
+所在位置 行:1 字符: 32
++ ... NG='utf-8'; & ".venv\Scripts\python.exe" train_minimind_v3.py --steps ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Building prefix... dictionary ...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Loading model from cache C:\Users\Administrator\AppData\Local\Temp\jieba.cache
+Loading model cost 0.459 seconds.
+Prefix dict has been built successfully.
+data: tokens 6,404,021 | train windows 6,203,637 | val windows 199,616 | crop len 384
+璇嶈〃澶у皬 23003
+浠ｇ悊璇嶈〃澶у皬 2094
+[涓€鑷存€ 鍓?400 姝?max|fused-eager| = 0.0358 | loss 17.179 -> 4.621
+model params: 96,501,564
+step     1 | loss 17.168 | lr 2.00e-06 | 276 ms/step
+step    50 | loss 8.723 | lr 1.00e-04 | 174 ms/step
+step   100 | loss 6.026 | lr 2.00e-04 | 172 ms/step
+step   150 | loss 5.706 | lr 3.00e-04 | 173 ms/step
+step   200 | loss 5.281 | lr 3.00e-04 | 171 ms/step
+step   250 | loss 5.144 | lr 3.00e-04 | 170 ms/step
+step   300 | loss 4.850 | lr 3.00e-04 | 169 ms/step
+step   350 | loss 4.830 | lr 3.00e-04 | 169 ms/step
+step   400 | loss 4.809 | lr 2.99e-04 | 169 ms/step
+step   450 | loss 4.761 | lr 2.99e-04 | 169 ms/step
+step   500 | loss 4.555 | lr 2.99e-04 | 169 ms/step
+  >> val loss 4.843 | ppl 126.79
+step   550 | loss 4.645 | lr 2.98e-04 | 175 ms/step
+step   600 | loss 4.529 | lr 2.98e-04 | 174 ms/step
+step   650 | loss 4.533 | lr 2.97e-04 | 173 ms/step
+step   700 | loss 4.412 | lr 2.97e-04 | 173 ms/step
+step   750 | loss 4.468 | lr 2.96e-04 | 173 ms/step
+step   800 | loss 4.588 | lr 2.95e-04 | 172 ms/step
+step   850 | loss 4.524 | lr 2.95e-04 | 172 ms/step
+step   900 | loss 4.480 | lr 2.94e-04 | 172 ms/step
+step   950 | loss 4.520 | lr 2.93e-04 | 172 ms/step
+step  1000 | loss 4.492 | lr 2.92e-04 | 171 ms/step
+  >> val loss 4.666 | ppl 106.24
+step  1050 | loss 4.375 | lr 2.91e-04 | 175 ms/step
+step  1100 | loss 4.474 | lr 2.90e-04 | 174 ms/step
+step  1150 | loss 4.291 | lr 2.89e-04 | 174 ms/step
+step  1200 | loss 4.319 | lr 2.88e-04 | 174 ms/step
+step  1250 | loss 4.269 | lr 2.87e-04 | 173 ms/step
+step  1300 | loss 4.275 | lr 2.86e-04 | 173 ms/step
+step  1350 | loss 4.291 | lr 2.85e-04 | 173 ms/step
+step  1400 | loss 4.217 | lr 2.83e-04 | 173 ms/step
+step  1450 | loss 4.247 | lr 2.82e-04 | 172 ms/step
+step  1500 | loss 4.245 | lr 2.81e-04 | 172 ms/step
+  >> val loss 4.549 | ppl 94.58
+step  1550 | loss 4.314 | lr 2.79e-04 | 174 ms/step
+step  1600 | loss 4.201 | lr 2.78e-04 | 174 ms/step
+step  1650 | loss 4.201 | lr 2.76e-04 | 174 ms/step
+step  1700 | loss 4.278 | lr 2.75e-04 | 174 ms/step
+step  1750 | loss 4.150 | lr 2.73e-04 | 173 ms/step
+step  1800 | loss 4.220 | lr 2.72e-04 | 173 ms/step
+step  1850 | loss 4.192 | lr 2.70e-04 | 173 ms/step
+step  1900 | loss 4.190 | lr 2.68e-04 | 173 ms/step
+step  1950 | loss 4.097 | lr 2.66e-04 | 173 ms/step
+step  2000 | loss 4.087 | lr 2.65e-04 | 173 ms/step
+  >> val loss 4.452 | ppl 85.83
+step  2050 | loss 4.041 | lr 2.63e-04 | 174 ms/step
+step  2100 | loss 4.027 | lr 2.61e-04 | 174 ms/step
+step  2150 | loss 4.153 | lr 2.59e-04 | 174 ms/step
+step  2200 | loss 3.986 | lr 2.57e-04 | 174 ms/step
+step  2250 | loss 4.124 | lr 2.55e-04 | 174 ms/step
+step  2300 | loss 4.117 | lr 2.53e-04 | 174 ms/step
+step  2350 | loss 3.955 | lr 2.51e-04 | 173 ms/step
+step  2400 | loss 4.006 | lr 2.49e-04 | 173 ms/step
+step  2450 | loss 3.964 | lr 2.47e-04 | 173 ms/step
+step  2500 | loss 4.036 | lr 2.45e-04 | 173 ms/step
+  >> val loss 4.382 | ppl 79.97
+step  2550 | loss 3.964 | lr 2.42e-04 | 174 ms/step
+step  2600 | loss 3.918 | lr 2.40e-04 | 174 ms/step
+step  2650 | loss 3.958 | lr 2.38e-04 | 174 ms/step
+step  2700 | loss 4.007 | lr 2.36e-04 | 174 ms/step
+step  2750 | loss 3.872 | lr 2.33e-04 | 174 ms/step
+step  2800 | loss 3.932 | lr 2.31e-04 | 174 ms/step
+step  2850 | loss 3.938 | lr 2.29e-04 | 174 ms/step
+step  2900 | loss 3.766 | lr 2.26e-04 | 173 ms/step
+step  2950 | loss 3.921 | lr 2.24e-04 | 173 ms/step
+step  3000 | loss 3.852 | lr 2.21e-04 | 173 ms/step
+  >> val loss 4.345 | ppl 77.11
+step  3050 | loss 3.891 | lr 2.19e-04 | 174 ms/step
+step  3100 | loss 3.691 | lr 2.16e-04 | 174 ms/step
+step  3150 | loss 3.874 | lr 2.14e-04 | 174 ms/step
+step  3200 | loss 3.832 | lr 2.11e-04 | 174 ms/step
+step  3250 | loss 3.826 | lr 2.09e-04 | 174 ms/step
+step  3300 | loss 3.745 | lr 2.06e-04 | 174 ms/step
+step  3350 | loss 3.878 | lr 2.04e-04 | 174 ms/step
+step  3400 | loss 3.818 | lr 2.01e-04 | 173 ms/step
+step  3450 | loss 3.898 | lr 1.98e-04 | 173 ms/step
+step  3500 | loss 3.729 | lr 1.96e-04 | 173 ms/step
+  >> val loss 4.319 | ppl 75.11
+step  3550 | loss 3.721 | lr 1.93e-04 | 174 ms/step
+step  3600 | loss 3.774 | lr 1.91e-04 | 174 ms/step
+step  3650 | loss 3.761 | lr 1.88e-04 | 174 ms/step
+step  3700 | loss 3.723 | lr 1.85e-04 | 174 ms/step
+step  3750 | loss 3.884 | lr 1.83e-04 | 174 ms/step
+step  3800 | loss 3.814 | lr 1.80e-04 | 174 ms/step
+step  3850 | loss 3.689 | lr 1.77e-04 | 174 ms/step
+step  3900 | loss 3.720 | lr 1.74e-04 | 174 ms/step
+step  3950 | loss 3.780 | lr 1.72e-04 | 173 ms/step
+step  4000 | loss 3.655 | lr 1.69e-04 | 173 ms/step
+  >> val loss 4.300 | ppl 73.69
+step  4050 | loss 3.683 | lr 1.66e-04 | 174 ms/step
+step  4100 | loss 3.709 | lr 1.64e-04 | 174 ms/step
+step  4150 | loss 3.567 | lr 1.61e-04 | 174 ms/step
+step  4200 | loss 3.637 | lr 1.58e-04 | 174 ms/step
+step  4250 | loss 3.636 | lr 1.56e-04 | 174 ms/step
+step  4300 | loss 3.703 | lr 1.53e-04 | 174 ms/step
+step  4350 | loss 3.625 | lr 1.50e-04 | 174 ms/step
+step  4400 | loss 3.678 | lr 1.47e-04 | 174 ms/step
+step  4450 | loss 3.688 | lr 1.45e-04 | 174 ms/step
+step  4500 | loss 3.571 | lr 1.42e-04 | 174 ms/step
+  >> val loss 4.295 | ppl 73.36
+step  4550 | loss 3.531 | lr 1.39e-04 | 174 ms/step
+step  4600 | loss 3.456 | lr 1.37e-04 | 174 ms/step
+step  4650 | loss 3.505 | lr 1.34e-04 | 174 ms/step
+step  4700 | loss 3.519 | lr 1.32e-04 | 174 ms/step
+step  4750 | loss 3.529 | lr 1.29e-04 | 174 ms/step
+step  4800 | loss 3.673 | lr 1.26e-04 | 174 ms/step
+step  4850 | loss 3.548 | lr 1.24e-04 | 175 ms/step
+step  4900 | loss 3.565 | lr 1.21e-04 | 175 ms/step
+step  4950 | loss 3.615 | lr 1.19e-04 | 176 ms/step
+step  5000 | loss 3.525 | lr 1.16e-04 | 177 ms/step
+  >> val loss 4.294 | ppl 73.26
+step  5050 | loss 3.527 | lr 1.14e-04 | 179 ms/step
+step  5100 | loss 3.508 | lr 1.11e-04 | 179 ms/step
+step  5150 | loss 3.502 | lr 1.09e-04 | 180 ms/step
+step  5200 | loss 3.508 | lr 1.06e-04 | 181 ms/step
+step  5250 | loss 3.402 | lr 1.04e-04 | 181 ms/step
+step  5300 | loss 3.495 | lr 1.01e-04 | 182 ms/step
+step  5350 | loss 3.493 | lr 9.91e-05 | 183 ms/step
+step  5400 | loss 3.425 | lr 9.67e-05 | 184 ms/step
+step  5450 | loss 3.361 | lr 9.44e-05 | 184 ms/step
+step  5500 | loss 3.480 | lr 9.21e-05 | 185 ms/step
+  >> val loss 4.294 | ppl 73.26
+step  5550 | loss 3.533 | lr 8.99e-05 | 186 ms/step
+step  5600 | loss 3.449 | lr 8.76e-05 | 186 ms/step
+step  5650 | loss 3.438 | lr 8.54e-05 | 185 ms/step
+step  5700 | loss 3.375 | lr 8.33e-05 | 185 ms/step
+step  5750 | loss 3.422 | lr 8.11e-05 | 185 ms/step
+step  5800 | loss 3.389 | lr 7.90e-05 | 185 ms/step
+step  5850 | loss 3.348 | lr 7.70e-05 | 185 ms/step
+step  5900 | loss 3.403 | lr 7.49e-05 | 185 ms/step
+step  5950 | loss 3.341 | lr 7.29e-05 | 185 ms/step
+step  6000 | loss 3.410 | lr 7.10e-05 | 185 ms/step
+  >> val loss 4.295 | ppl 73.31
+step  6050 | loss 3.406 | lr 6.91e-05 | 185 ms/step
+step  6100 | loss 3.373 | lr 6.72e-05 | 185 ms/step
+step  6150 | loss 3.322 | lr 6.53e-05 | 185 ms/step
+step  6200 | loss 3.359 | lr 6.35e-05 | 185 ms/step
+step  6250 | loss 3.308 | lr 6.18e-05 | 184 ms/step
+step  6300 | loss 3.348 | lr 6.01e-05 | 184 ms/step
+step  6350 | loss 3.308 | lr 5.84e-05 | 184 ms/step
+step  6400 | loss 3.414 | lr 5.67e-05 | 184 ms/step
+step  6450 | loss 3.169 | lr 5.52e-05 | 184 ms/step
+step  6500 | loss 3.353 | lr 5.36e-05 | 184 ms/step
+  >> val loss 4.303 | ppl 73.95
+step  6550 | loss 3.161 | lr 5.21e-05 | 184 ms/step
+step  6600 | loss 3.330 | lr 5.06e-05 | 184 ms/step
+step  6650 | loss 3.352 | lr 4.92e-05 | 184 ms/step
+step  6700 | loss 3.277 | lr 4.79e-05 | 184 ms/step
+step  6750 | loss 3.243 | lr 4.65e-05 | 184 ms/step
+step  6800 | loss 3.315 | lr 4.53e-05 | 183 ms/step
+step  6850 | loss 3.323 | lr 4.40e-05 | 183 ms/step
+step  6900 | loss 3.262 | lr 4.29e-05 | 183 ms/step
+step  6950 | loss 3.290 | lr 4.17e-05 | 183 ms/step
+step  7000 | loss 3.275 | lr 4.07e-05 | 183 ms/step
+  >> val loss 4.306 | ppl 74.15
+step  7050 | loss 3.162 | lr 3.96e-05 | 183 ms/step
+step  7100 | loss 3.217 | lr 3.87e-05 | 183 ms/step
+step  7150 | loss 3.268 | lr 3.77e-05 | 183 ms/step
+step  7200 | loss 3.188 | lr 3.69e-05 | 183 ms/step
+step  7250 | loss 3.311 | lr 3.60e-05 | 183 ms/step
+step  7300 | loss 3.255 | lr 3.53e-05 | 183 ms/step
+step  7350 | loss 3.239 | lr 3.45e-05 | 183 ms/step
+step  7400 | loss 3.266 | lr 3.39e-05 | 183 ms/step
+step  7450 | loss 3.285 | lr 3.33e-05 | 182 ms/step
+step  7500 | loss 3.303 | lr 3.27e-05 | 182 ms/step
+  >> val loss 4.311 | ppl 74.53
+step  7550 | loss 3.254 | lr 3.22e-05 | 183 ms/step
+step  7600 | loss 3.287 | lr 3.17e-05 | 183 ms/step
+step  7650 | loss 3.431 | lr 3.13e-05 | 182 ms/step
+step  7700 | loss 3.231 | lr 3.10e-05 | 182 ms/step
+step  7750 | loss 3.205 | lr 3.07e-05 | 182 ms/step
+step  7800 | loss 3.384 | lr 3.04e-05 | 182 ms/step
+step  7850 | loss 3.194 | lr 3.02e-05 | 182 ms/step
+step  7900 | loss 3.262 | lr 3.01e-05 | 182 ms/step
+step  7950 | loss 3.290 | lr 3.00e-05 | 182 ms/step
+step  8000 | loss 3.216 | lr 3.00e-05 | 182 ms/step
+  >> val loss 4.320 | ppl 75.16
+
+[鐢熸垚鏍锋湰]
+  [浜哄伐鏅鸿兘鏄痌 -> 浜哄伐鏅鸿兘鏄汉宸ユ櫤鑳界殑鏈潵鐨勫彂灞曪紝鍙互浠庝汉宸ユ櫤鑳姐€佸尰鐤楁満鍣ㄤ汉绛夋柟闈紝涓烘垜瀵瑰啘涓氶鍩熶腑鐨勫彂灞曘€備汉宸ユ櫤鑳藉湪鏈潵锛屽畠涔熸槸鈥滄湭鏉モ€濈瓑鏂归潰鐨勫簲鐢ㄣ€傝櫧鐒堕闄┿€佹秾鐜帮紝渚嬪锛屾瘮濡傚尰鐤楁満鍣ㄤ汉绛夐鍩燂紝浜哄伐鏅鸿兘鎶€鏈殑鏈潵灏嗛€愭笎鏅強锛屼互鍙婃洿澶氱殑鍙戝睍鐨勬寫鎴?
+  [涓浗鐨勯閮芥槸] -> 涓浗鐨勯閮芥槸涓浗鍘嗗彶涓婄殑鍩庡競涔熸湁鐫€閲嶈鏃舵湡鐨勯噸瑕佸煄甯傜殑寤虹瓚鍜屾枃鍖栧拰涓浗鏂囧鐨勫煄甯傘€傝繖浜涙櫙瑙傘€傝繖浜涢閮芥槸涓浗绀句細鍏抽敭鍥犵礌锛屼腑鍥芥枃鍖栬壓鏈彂灞曚笌鑹烘湳鍙戝睍浜х敓浜嗘繁杩滅殑閲嶈浜嬩欢銆傜敓鎴愪竴棣栦互鐩搁亣涔熷彂灞曠殑銆傚湪涔嬪績銆傚ソ鐨勩€傜粰鎴戞帹鑽愪竴棣栦互
+  [鏄ュぉ鏉ヤ簡锛宂 -> 鏄ュぉ鏉ヤ簡锛屼綘鐨勬棭涓婏紝鏄ラ鎷傞潰锛屾俯鏆栫殑涓€澶滐紝娓╂煍鐨勬唱澶╁湴锛屽畠鎶婁綘灏辫寰楀儚杩欏骇锛屾垜鐨勬椂鍊欙紵鍦ㄥ紑杞︾箒鑺辩殑鐖变綘鏄垜鐨勭敓鍛戒腑锛屾湁浠€涔堝叧浜庢紨缁庡洖瀹跺悗鍛紵鎴戝拰鍔涢噺鍜岀埍鎯呯殑鐖辨儏鏄汉绫伙紝鎴?
+  [涓浗缁忔祹] -> 涓浗缁忔祹鐨勫奖鍝嶏紝浣嗚繖绉嶆妧鏈殑鍒涙柊鐨勬寫鎴樺拰鏂囧寲鎰熷叴瓒ｏ紝渚嬪鍦ㄥ煄甯傚彂灞曪紝鍦ㄥ啘涓氱敓浜ф晥鐜囥€傝鍛婅瘔鎴戜竴浜涘叧浜庝綔瀹剁殑鍙戝睍涓紝鍙互鍦ㄦ繁杩滈棶棰橈紝濡傚噺灏戞晠瀹€佹暎姝ユ槸浠€涔堟槸闈炲父閲嶈鐨勫巻鍙蹭笂鐨勩€傚綋鐒跺彲浠ユ洿濂藉湴搴旂敤涓殑闂銆佸彂灞曞拰澶氭牱鎬х瓑绛?
+
+checkpoint/log/samples -> minimind_v3_out/

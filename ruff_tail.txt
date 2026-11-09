@@ -1,0 +1,30 @@
+    |
+help: Rewrite as `Gm * run < M`
+    |
+102 |         p = tl.load(ca_ptr + m_off, mask=lmask, other=-1)
+    -         win = M > Gm * run
+103 +         win = Gm * run < M
+104 |         cur = tl.where(win, p, cur)
+    |
+
+F841 Local variable `pb` is assigned to but never used
+   --> fla/ops/decay_max_scan/triton_backend.py:143:5
+    |
+141 |     lmask = offs < DH
+142 |     pv = tl.load(v_ptr + offs * H + h, mask=lmask, other=0.0).to(tl.float32)
+143 |     pb = tl.load(b_ptr + offs * H + h, mask=lmask, other=0.0).to(tl.float32)
+    |     ^^
+144 |     base = b * sg0 + h * sg3 + offs * sg1
+145 |     R = tl.zeros([BLOCK_DH], tl.float32)
+    |
+help: Remove assignment to unused variable `pb`
+    |
+142 |     pv = tl.load(v_ptr + offs * H + h, mask=lmask, other=0.0).to(tl.float32)
+    -     pb = tl.load(b_ptr + offs * H + h, mask=lmask, other=0.0).to(tl.float32)
+143 +     tl.load(b_ptr + offs * H + h, mask=lmask, other=0.0).to(tl.float32)
+144 |     base = b * sg0 + h * sg3 + offs * sg1
+    |
+note: This is an unsafe fix and may change runtime behavior
+
+Found 2 errors.
+[*] 1 fixable with `--fix` (1 unsafe fix available with `--fix --unsafe-fixes`).

@@ -1,0 +1,38 @@
+== bias=ballistic3 seed=2 steps=6000 bs=64 ctx=256 d=384 L=6 src=sub
+  sub stream: train 22,016,695 / val 1,158,774
+params 11,457,592  V=2048
+  step     1  loss 7.665  val 7.658  ppl 2117.97  [3s]
+  step   250  loss 4.064  val 4.037  ppl   56.66  [42s]
+  step   500  loss 3.632  val 3.628  ppl   37.62  [82s]
+  step   750  loss 3.375  val 3.358  ppl   28.74  [121s]
+  step  1000  loss 3.183  val 3.196  ppl   24.44  [160s]
+  step  1250  loss 3.115  val 3.097  ppl   22.13  [199s]
+  step  1500  loss 2.969  val 3.005  ppl   20.18  [239s]
+  step  1750  loss 2.953  val 2.920  ppl   18.54  [278s]
+  step  2000  loss 2.843  val 2.874  ppl   17.71  [317s]
+  step  2250  loss 2.751  val 2.819  ppl   16.76  [356s]
+  step  2500  loss 2.705  val 2.761  ppl   15.81  [395s]
+  step  2750  loss 2.667  val 2.742  ppl   15.52  [434s]
+  step  3000  loss 2.584  val 2.704  ppl   14.94  [473s]
+  step  3250  loss 2.632  val 2.664  ppl   14.35  [513s]
+  step  3500  loss 2.696  val 2.636  ppl   13.96  [552s]
+  step  3750  loss 2.593  val 2.609  ppl   13.59  [591s]
+  step  4000  loss 2.529  val 2.594  ppl   13.39  [631s]
+  step  4250  loss 2.507  val 2.571  ppl   13.08  [670s]
+  step  4500  loss 2.433  val 2.549  ppl   12.80  [709s]
+  step  4750  loss 2.512  val 2.534  ppl   12.60  [748s]
+  step  5000  loss 2.543  val 2.519  ppl   12.41  [785s]
+  step  5250  loss 2.488  val 2.504  ppl   12.24  [809s]
+  step  5500  loss 2.429  val 2.500  ppl   12.19  [834s]
+  step  5750  loss 2.397  val 2.503  ppl   12.22  [859s]
+  step  6000  loss 2.496  val 2.496  ppl   12.13  [883s]
+{
+ "bias": "ballistic3",
+ "seed": 2,
+ "steps": 6000,
+ "params": 11457592,
+ "final_val_loss": 2.4958322048187256,
+ "best_val_loss": 2.4958322048187256,
+ "final_ppl": 12.131825482342908,
+ "elapsed": 883.3067617416382
+}

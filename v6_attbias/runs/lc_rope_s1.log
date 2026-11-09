@@ -1,0 +1,50 @@
+== bias=rope seed=1 steps=6000 bs=32 ctx=512 d=384 L=6 src=sub
+  sub stream: train 22,016,695 / val 1,158,774
+params 11,424,768  V=2048
+  step     1  loss 7.651  val 7.649  ppl 2099.31  [2s]
+  step   250  loss 3.814  val 3.878  ppl   48.34  [53s]
+  step   500  loss 3.450  val 3.414  ppl   30.38  [104s]
+  step   750  loss 3.264  val 3.182  ppl   24.09  [154s]
+  step  1000  loss 3.006  val 3.044  ppl   20.99  [204s]
+  step  1250  loss 2.906  val 2.931  ppl   18.74  [254s]
+  step  1500  loss 2.817  val 2.845  ppl   17.20  [305s]
+  step  1750  loss 2.728  val 2.772  ppl   15.99  [354s]
+  step  2000  loss 2.668  val 2.692  ppl   14.77  [404s]
+  step  2250  loss 2.681  val 2.642  ppl   14.05  [454s]
+  step  2500  loss 2.511  val 2.578  ppl   13.17  [504s]
+  step  2750  loss 2.513  val 2.542  ppl   12.70  [556s]
+  step  3000  loss 2.508  val 2.516  ppl   12.38  [605s]
+  step  3250  loss 2.520  val 2.492  ppl   12.09  [655s]
+  step  3500  loss 2.446  val 2.465  ppl   11.77  [705s]
+  step  3750  loss 2.492  val 2.449  ppl   11.58  [755s]
+  step  4000  loss 2.321  val 2.429  ppl   11.35  [806s]
+  step  4250  loss 2.357  val 2.410  ppl   11.13  [855s]
+  step  4500  loss 2.316  val 2.400  ppl   11.02  [905s]
+  step  4750  loss 2.346  val 2.386  ppl   10.87  [955s]
+  step  5000  loss 2.400  val 2.378  ppl   10.78  [1005s]
+  step  5250  loss 2.242  val 2.364  ppl   10.64  [1055s]
+  step  5500  loss 2.229  val 2.360  ppl   10.60  [1104s]
+  step  5750  loss 2.286  val 2.355  ppl   10.54  [1154s]
+  step  6000  loss 2.181  val 2.351  ppl   10.49  [1186s]
+  [len-eval] ctx=512: loss 2.270 ppl 9.68 (B=8)
+  [len-eval] ctx=1024: loss 2.656 ppl 14.24 (B=8)
+  [len-eval] ctx=2048: loss 3.201 ppl 24.56 (B=8)
+  [len-eval] ctx=4096: loss 3.660 ppl 38.85 (B=4)
+{
+ "bias": "rope",
+ "seed": 1,
+ "steps": 6000,
+ "params": 11424768,
+ "final_val_loss": 2.350822369257609,
+ "best_val_loss": 2.350822369257609,
+ "final_ppl": 10.494196281539093,
+ "elapsed": 1185.7226736545563,
+ "ctx": 512,
+ "src": "sub",
+ "length_eval": {
+  "512": 2.2701163291931152,
+  "1024": 2.65627384185791,
+  "2048": 3.201144218444824,
+  "4096": 3.6595876216888428
+ }
+}

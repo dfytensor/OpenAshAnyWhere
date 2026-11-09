@@ -1,0 +1,48 @@
+== bias=ballistic_abs seed=1 steps=6000 bs=32 ctx=512 d=384 L=6 src=sub
+  sub stream: train 22,016,695 / val 1,158,774
+params 11,424,824  V=2048
+  step     1  loss 7.658  val 7.650  ppl 2101.69  [3s]
+  step   250  loss 4.109  val 4.155  ppl   63.78  [55s]
+  step   500  loss 3.867  val 3.870  ppl   47.96  [109s]
+  step   750  loss 3.603  val 3.537  ppl   34.38  [162s]
+  step  1000  loss 3.293  val 3.337  ppl   28.13  [215s]
+  step  1250  loss 3.144  val 3.182  ppl   24.09  [268s]
+  step  1500  loss 3.064  val 3.072  ppl   21.59  [321s]
+  step  1750  loss 2.978  val 2.980  ppl   19.69  [374s]
+  step  2000  loss 2.888  val 2.917  ppl   18.49  [427s]
+  step  2250  loss 2.901  val 2.858  ppl   17.43  [480s]
+  step  2500  loss 2.741  val 2.800  ppl   16.44  [533s]
+  step  2750  loss 2.724  val 2.759  ppl   15.79  [586s]
+  step  3000  loss 2.716  val 2.725  ppl   15.26  [639s]
+  step  3250  loss 2.727  val 2.691  ppl   14.75  [692s]
+  step  3500  loss 2.643  val 2.656  ppl   14.23  [745s]
+  step  3750  loss 2.679  val 2.635  ppl   13.95  [798s]
+  step  4000  loss 2.508  val 2.608  ppl   13.57  [851s]
+  step  4250  loss 2.552  val 2.586  ppl   13.28  [904s]
+  step  4500  loss 2.528  val 2.563  ppl   12.97  [957s]
+  step  4750  loss 2.537  val 2.545  ppl   12.74  [1010s]
+  step  5000  loss 2.593  val 2.539  ppl   12.67  [1063s]
+  step  5250  loss 2.438  val 2.522  ppl   12.45  [1116s]
+  step  5500  loss 2.422  val 2.511  ppl   12.32  [1169s]
+  step  5750  loss 2.486  val 2.508  ppl   12.28  [1214s]
+  step  6000  loss 2.375  val 2.498  ppl   12.16  [1248s]
+  [len-eval] ctx=512: loss 2.423 ppl 11.28 (B=8)
+  [len-eval] ctx=1024: loss 2.844 ppl 17.18 (B=8)
+  [len-eval] ctx=2048: loss 3.734 ppl 41.85 (B=8)
+{
+ "bias": "ballistic_abs",
+ "seed": 1,
+ "steps": 6000,
+ "params": 11424824,
+ "final_val_loss": 2.497941255569458,
+ "best_val_loss": 2.497941255569458,
+ "final_ppl": 12.15743911871939,
+ "elapsed": 1248.5461580753326,
+ "ctx": 512,
+ "src": "sub",
+ "length_eval": {
+  "512": 2.4227488040924072,
+  "1024": 2.8438501358032227,
+  "2048": 3.734204053878784
+ }
+}

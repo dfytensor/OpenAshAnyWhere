@@ -1,0 +1,50 @@
+== bias=ballistic2 seed=2 steps=6000 bs=32 ctx=512 d=384 L=6 src=sub
+  sub stream: train 22,016,695 / val 1,158,774
+params 11,424,824  V=2048
+  step     1  loss 7.664  val 7.642  ppl 2083.42  [7s]
+  step   250  loss 4.094  val 4.110  ppl   60.94  [142s]
+  step   500  loss 3.786  val 3.787  ppl   44.14  [276s]
+  step   750  loss 3.467  val 3.524  ppl   33.93  [410s]
+  step  1000  loss 3.238  val 3.327  ppl   27.87  [545s]
+  step  1250  loss 3.200  val 3.212  ppl   24.83  [1009s]
+  step  1500  loss 3.094  val 3.098  ppl   22.16  [1552s]
+  step  1750  loss 2.985  val 3.013  ppl   20.34  [2096s]
+  step  2000  loss 2.922  val 2.941  ppl   18.94  [2640s]
+  step  2250  loss 2.805  val 2.876  ppl   17.74  [3159s]
+  step  2500  loss 2.796  val 2.833  ppl   17.00  [3221s]
+  step  2750  loss 2.732  val 2.787  ppl   16.24  [3273s]
+  step  3000  loss 2.668  val 2.744  ppl   15.56  [3331s]
+  step  3250  loss 2.619  val 2.704  ppl   14.93  [3367s]
+  step  3500  loss 2.705  val 2.684  ppl   14.64  [3397s]
+  step  3750  loss 2.583  val 2.654  ppl   14.21  [3425s]
+  step  4000  loss 2.600  val 2.627  ppl   13.83  [3454s]
+  step  4250  loss 2.493  val 2.613  ppl   13.64  [3483s]
+  step  4500  loss 2.593  val 2.589  ppl   13.31  [3511s]
+  step  4750  loss 2.462  val 2.571  ppl   13.08  [3540s]
+  step  5000  loss 2.486  val 2.559  ppl   12.92  [3569s]
+  step  5250  loss 2.491  val 2.545  ppl   12.74  [3598s]
+  step  5500  loss 2.514  val 2.538  ppl   12.66  [3626s]
+  step  5750  loss 2.426  val 2.531  ppl   12.56  [3655s]
+  step  6000  loss 2.454  val 2.521  ppl   12.44  [3684s]
+  [len-eval] ctx=512: loss 2.418 ppl 11.23 (B=8)
+  [len-eval] ctx=1024: loss 2.779 ppl 16.10 (B=8)
+  [len-eval] ctx=2048: loss 3.640 ppl 38.09 (B=8)
+  [len-eval] ctx=4096: loss 4.315 ppl 74.85 (B=4)
+{
+ "bias": "ballistic2",
+ "seed": 2,
+ "steps": 6000,
+ "params": 11424824,
+ "final_val_loss": 2.521104653676351,
+ "best_val_loss": 2.521104653676351,
+ "final_ppl": 12.442333544424933,
+ "elapsed": 3684.1833589076996,
+ "ctx": 512,
+ "src": "sub",
+ "length_eval": {
+  "512": 2.4182841777801514,
+  "1024": 2.7790658473968506,
+  "2048": 3.639876127243042,
+  "4096": 4.315494537353516
+ }
+}

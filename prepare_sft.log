@@ -1,0 +1,11 @@
+词表大小 23003
+代理词表大小 2094
+sampled 60000 conversations
+  10000/60000 convs | tokens so far 3,515,140
+  20000/60000 convs | tokens so far 7,148,834
+  30000/60000 convs | tokens so far 10,775,310
+  40000/60000 convs | tokens so far 14,372,261
+  50000/60000 convs | tokens so far 18,029,892
+  60000/60000 convs | tokens so far 21,641,160
+total tokens: 21,641,160 | skipped: 0
+windows: 21,640,776 -> F:\OpenASH2605\minimind_data\sft_cached_60000_384.pt

@@ -1,0 +1,87 @@
+﻿data: tokens 6,404,021 | train windows 6,203,637 | val windows 199,616 | crop len 384
+词表大小 23003
+代理词表大小 2094
+python.exe : Building prefix dict from the default dictionary ...
+所在位置 行:1 字符: 1
++ & ".venv\Scripts\python.exe" -u train_minimind_v3.py --steps 2500 --b ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Building prefix... dictionary ...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Loading model from cache C:\Users\Administrator\AppData\Local\Temp\jieba.cache
+Loading model cost 0.504 seconds.
+Prefix dict has been built successfully.
+model params: 96,519,996
+step     1 | loss 17.171 | lr 2.00e-06 | 1095 ms/step
+step    50 | loss 8.725 | lr 1.00e-04 | 721 ms/step
+step   100 | loss 6.026 | lr 2.00e-04 | 868 ms/step
+step   150 | loss 5.708 | lr 3.00e-04 | 919 ms/step
+step   200 | loss 5.280 | lr 3.00e-04 | 928 ms/step
+step   250 | loss 5.146 | lr 2.99e-04 | 934 ms/step
+step   300 | loss 4.851 | lr 2.97e-04 | 949 ms/step
+step   350 | loss 4.827 | lr 2.95e-04 | 960 ms/step
+step   400 | loss 4.806 | lr 2.93e-04 | 967 ms/step
+step   450 | loss 4.754 | lr 2.89e-04 | 971 ms/step
+step   500 | loss 4.546 | lr 2.85e-04 | 970 ms/step
+remark: triton_ops.py:52:0: 159 instructions in function
+remark: triton_ops.py:94:0: 187 instructions in function
+  >> val loss 4.833 | ppl 125.65
+step   550 | loss 4.628 | lr 2.81e-04 | 1023 ms/step
+step   600 | loss 4.500 | lr 2.76e-04 | 1027 ms/step
+step   650 | loss 4.476 | lr 2.71e-04 | 1027 ms/step
+step   700 | loss 4.338 | lr 2.65e-04 | 1023 ms/step
+step   750 | loss 4.381 | lr 2.59e-04 | 1022 ms/step
+step   800 | loss 4.491 | lr 2.52e-04 | 1022 ms/step
+step   850 | loss 4.404 | lr 2.45e-04 | 1023 ms/step
+step   900 | loss 4.355 | lr 2.38e-04 | 1023 ms/step
+step   950 | loss 4.369 | lr 2.30e-04 | 1023 ms/step
+step  1000 | loss 4.319 | lr 2.22e-04 | 1023 ms/step
+  >> val loss 4.509 | ppl 90.82
+step  1050 | loss 4.195 | lr 2.14e-04 | 1039 ms/step
+step  1100 | loss 4.266 | lr 2.05e-04 | 1039 ms/step
+step  1150 | loss 4.105 | lr 1.96e-04 | 1041 ms/step
+step  1200 | loss 4.097 | lr 1.87e-04 | 1042 ms/step
+step  1250 | loss 4.016 | lr 1.79e-04 | 1044 ms/step
+step  1300 | loss 4.051 | lr 1.70e-04 | 1043 ms/step
+step  1350 | loss 4.040 | lr 1.60e-04 | 1045 ms/step
+step  1400 | loss 3.944 | lr 1.51e-04 | 1042 ms/step
+step  1450 | loss 3.963 | lr 1.43e-04 | 1041 ms/step
+step  1500 | loss 3.963 | lr 1.34e-04 | 1038 ms/step
+  >> val loss 4.291 | ppl 73.05
+step  1550 | loss 4.009 | lr 1.25e-04 | 1051 ms/step
+step  1600 | loss 3.887 | lr 1.16e-04 | 1050 ms/step
+step  1650 | loss 3.860 | lr 1.08e-04 | 1049 ms/step
+step  1700 | loss 3.972 | lr 1.00e-04 | 1046 ms/step
+step  1750 | loss 3.817 | lr 9.24e-05 | 1045 ms/step
+step  1800 | loss 3.878 | lr 8.49e-05 | 1043 ms/step
+step  1850 | loss 3.822 | lr 7.78e-05 | 1042 ms/step
+step  1900 | loss 3.858 | lr 7.11e-05 | 1040 ms/step
+step  1950 | loss 3.785 | lr 6.49e-05 | 1040 ms/step
+step  2000 | loss 3.734 | lr 5.91e-05 | 1039 ms/step
+  >> val loss 4.156 | ppl 63.80
+step  2050 | loss 3.679 | lr 5.37e-05 | 1047 ms/step
+step  2100 | loss 3.673 | lr 4.88e-05 | 1045 ms/step
+step  2150 | loss 3.842 | lr 4.45e-05 | 1045 ms/step
+step  2200 | loss 3.650 | lr 4.07e-05 | 1044 ms/step
+step  2250 | loss 3.784 | lr 3.75e-05 | 1030 ms/step
+step  2300 | loss 3.762 | lr 3.48e-05 | 1014 ms/step
+step  2350 | loss 3.620 | lr 3.27e-05 | 999 ms/step
+step  2400 | loss 3.664 | lr 3.12e-05 | 984 ms/step
+step  2450 | loss 3.643 | lr 3.03e-05 | 970 ms/step
+step  2500 | loss 3.733 | lr 3.00e-05 | 957 ms/step
+  >> val loss 4.091 | ppl 59.77
+
+[生成样本]
+remark: triton_ops.py:52:0: 157 instructions in function
+remark: triton_ops.py:94:0: 182 instructions in function
+remark: triton_ops.py:52:0: 156 instructions in function
+remark: triton_ops.py:94:0: 187 instructions in function
+remark: triton_ops.py:94:0: 187 instructions in function
+  [人工智能是] -> 人工智能是不错的选择。请提供一些相关的信息，我将为你设计为我对一艘。您对以下关键词分析大量排序。这是一个表格五个关于哪个城市的信息，并提供新手的问题。在这里，我们会使用以下公式计算出一个列表：
+1. 将这个句子2
+remark: triton_ops.py:94:0: 182 instructions in function
+  [中国的首都是] -> 中国的首都是通过幽默、地球、人性、摧毁等领域。此外，由于人工智能技术还有助于减少塑料污染和分析等因素进行关键因素。在人工智能领域中，人工智能会将其转化为基础和机器学习。随着人工智能技术的应用发展，人工智能技术的进步也带来了很多。给我推荐一部
+  [春天来了，] -> 春天来了，于是它的气息。她的空气中，男孩轻轻流淌的爱人。整个世界上有一张心灵。舒缓着窗户，却在夜晚，她会在绽放着，他发现了一个人浪漫。生成一个人说，他问了一个圆的两个句子。
+  [中国经济] -> 中国经济发展，导致消费者期望的风险。生成一个有关爱情的演讲稿！请帮我回答一个好朋友去哪里旅游的天气吗？世界上最高的山峰是什么？在20岁时，是多么，位于尽力，它的年龄是多少？如果您需要在北京举行的价格范围内，
+
+checkpoint/log/samples -> minimind_v31_decay/
