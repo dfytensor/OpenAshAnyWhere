@@ -250,19 +250,24 @@ v3.7 的重复 span 绝对 CE 在全部 gap 档位为五模型最低（tf 的更
 
 ## 13. 最终总结（2026-11-08）
 
+> **⚠️ 更正（2026-11-09）：** 本节及 §11 的"超越 GDN（5/7 长度，−5.4%）"结论**已撤回**。根因是我们的 baseline harness 向 HF/FLA CausalLM 传入预 shift 的 targets（`ids[1:]`），而 HF 内部还会再 shift 一次——**所有 GDN/DeltaNet 基线被训练成了 2-ahead 预测目标**（详见下方 harness bug 记录）。修正 wrapper 后 GDN@3k = 16.86（被削弱版 21.30，差 4.4 PPL），旧 `full_gdn_80k` 权重在正确的 1-ahead 口径下 PPL ≈ 124k。已重训 `full_gdn_80k_fixed`（80000 步等 epoch），修正结果出来后更新本节。已同步公开更正（fla issue #1705 / PR #1706 评论）。
+> **不受影响的部分**：vs Transformer 的全长度胜利（我们的模型与 tf 基线同为 1-ahead 约定，fused/manual 双路径互证 1e-3 一致）；v3.x 架构演进链的全部内部消融。
+
 | 目标 | 结果 |
 |---|---|
 | 无 KV cache / O(1) 状态 | ✅ 全程保持；解码 fp32 精确 2.1e-05（v3.9 修复后） |
 | 超越 tf（同预算） | ✅ 15000/40000 步 × 全部长度（−18% ~ −75%） |
-| 超越 GDN（同预算） | ✅ 等 epoch 5/7 长度（@384 −5.4%，@64 −26.7%）+ 整体 PPL；GDN 仅 @1024/2048 保持 +2~4% |
+| 超越 GDN（同预算） | ⚠️ **已撤回**——基线被 harness bug 削弱，重训后重新裁决 |
 | 超越 v3.5 前代 | ✅ 全长度（−3.9~−4.8%） |
 
-**演进链**：v3.0 84.53 → v3.5 17.82 → v3.6 16.02 → v3.7 15.10 → **full_v37 12.10**（−86%）；同场竞技：GDN 12.79、tf 15.48。
+**演进链**：v3.0 84.53 → v3.5 17.82 → v3.6 16.02 → v3.7 15.10 → **full_v37 12.10**（−86%）；tf 同口径 15.48。
 
-架构配方（v3.7 最终版）：pre-norm RMSNorm ×2 + SiLU FFN + depthwise 因果短卷积（k=4, per-ch 门控）+ max-scan 三通道（分层多尺度 γ）+ FLA delta-rule KV 检索（kv_dh=48, β_init=4.0）+ 可学习位置编码。101.3M 参数，训练 O(S)，推理 O(1)。
+### Harness bug 记录（教训）
+
+`FlaLMWrapper.forward_loss(ids, targets)` 曾把 `targets=ids[1:]` 直接作为 `labels` 传给 HF CausalLM——HF 内部再做一次 shift（`logits[t] ↔ labels[t+1]`）导致双重位移，模型实际优化"从 ≤t 预测 t+2"的 2-ahead 目标。修复：labels 右滚一位（`labels[t+1] = targets[t]`）。裁决实验：同一窗口上 `out.loss == CE(logits[t], labels[t+1])`（=1.7335）而非 `CE(logits[t], labels[t])`（=8.99），铁证 HF 内部 shift。附带发现：旧 GDN 权重在正确口径下 PPL ≈ 124k，完美解释了此前的"FLA eval-path per-token CE 异常"（那不是 FLA 的 bug，是我们自己的）。
 
 ### 剩余边界（如实）
-1. GDN 在 ≥1024 超长上下文保持 +2~4%——恢复 max-scan 慢 γ 分层或引入更长 chunk 是候选手段
+1. vs GDN 的最终裁决待 `full_gdn_80k_fixed` 重训完成（80000 步等 epoch，进行中）
 2. FLA 库依赖仍在快速路径（自研 delta_chunk 已就绪为备选，速度 2-4×）
 3. 验证尺度 488M tokens / 101M 参数；更大规模需扩展算力
 
