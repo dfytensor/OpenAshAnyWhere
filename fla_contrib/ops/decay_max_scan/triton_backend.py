@@ -2,6 +2,8 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+# For a list of all contributors, visit:
+#   https://github.com/fla-org/flash-linear-attention/graphs/contributors
 
 """Triton backend for the decay-max scan: chunked forward with block-carry
 composition, and a reverse BPTT backward over coefficients recomputed in torch
@@ -100,7 +102,7 @@ def decay_max_scan_carry_fwd_kernel(
         Gm = tl.load(cg_ptr + m_off, mask=lmask, other=1.0).to(tl.float32)
         M = tl.load(cm_ptr + m_off, mask=lmask, other=float('-inf')).to(tl.float32)
         p = tl.load(ca_ptr + m_off, mask=lmask, other=-1)
-        win = M > Gm * run
+        win = Gm * run < M
         cur = tl.where(win, p, cur)
         run = tl.maximum(Gm * run, M)
     base = ck * CHUNK
@@ -140,7 +142,6 @@ def decay_max_scan_bwd_kernel(
     offs = tl.arange(0, BLOCK_DH)
     lmask = offs < DH
     pv = tl.load(v_ptr + offs * H + h, mask=lmask, other=0.0).to(tl.float32)
-    pb = tl.load(b_ptr + offs * H + h, mask=lmask, other=0.0).to(tl.float32)
     base = b * sg0 + h * sg3 + offs * sg1
     R = tl.zeros([BLOCK_DH], tl.float32)
     rho_c = tl.zeros([BLOCK_DH], tl.float32)   # rho_{j+1} loaded on the previous step
