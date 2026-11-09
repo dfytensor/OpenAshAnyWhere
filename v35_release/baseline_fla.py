@@ -50,7 +50,11 @@ class FlaLMWrapper(torch.nn.Module):
         self.model = model
 
     def forward_loss(self, ids, targets, fused_ce=True, **_):
-        out = self.model(input_ids=ids, labels=targets)
+        # FLA/HF CausalLM 在内部对 labels 做一次 shift（logits[t] ↔ labels[t+1]）。
+        # 我们的 targets[t] 就是 logits[t] 的目标（1-ahead），因此 labels 需要右滚一位，
+        # 让 labels[t+1] == targets[t]；labels[0] 是哑元（被 logits[:, :-1] 切片排除）。
+        labels = torch.cat([targets[:, -1:], targets[:, :-1]], dim=1)
+        out = self.model(input_ids=ids, labels=labels)
         return out.loss, None
 
     @torch.no_grad()

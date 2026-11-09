@@ -250,24 +250,25 @@ v3.7 的重复 span 绝对 CE 在全部 gap 档位为五模型最低（tf 的更
 
 ## 13. 最终总结（2026-11-08）
 
-> **⚠️ 更正（2026-11-09）：** 本节及 §11 的"超越 GDN（5/7 长度，−5.4%）"结论**已撤回**。根因是我们的 baseline harness 向 HF/FLA CausalLM 传入预 shift 的 targets（`ids[1:]`），而 HF 内部还会再 shift 一次——**所有 GDN/DeltaNet 基线被训练成了 2-ahead 预测目标**（详见下方 harness bug 记录）。修正 wrapper 后 GDN@3k = 16.86（被削弱版 21.30，差 4.4 PPL），旧 `full_gdn_80k` 权重在正确的 1-ahead 口径下 PPL ≈ 124k。已重训 `full_gdn_80k_fixed`（80000 步等 epoch），修正结果出来后更新本节。已同步公开更正（fla issue #1705 / PR #1706 评论）。
-> **不受影响的部分**：vs Transformer 的全长度胜利（我们的模型与 tf 基线同为 1-ahead 约定，fused/manual 双路径互证 1e-3 一致）；v3.x 架构演进链的全部内部消融。
+> **⚠️ 最终更正（2026-11-09）：** harness 双重位移 bug 修复后，正确训练的 GDN（`full_gdn_80k_fixed`，80000 步等 epoch）在**全部七个长度大幅领先**：@384 **8.42** vs v37 12.10（GDN −30%）、@64 12.06 vs 14.38、@2048 7.53 vs 11.73；复制召回也全面反超（rep 2.17@gap32、gain +1.63 均为全场第一）。此前"超越 GDN（5/7 长度）"完全是被削弱基线的产物，**已撤回**并公开更正（fla issue #1705 三条评论 + 横幅、PR #1706 同步）。修正后 GDN 甚至在 @64 就超过 tf（12.06 vs 17.63）——tf 的短上下文优势对正确的 GDN 不存在。
+> **仍然成立的结论**：vs 同预算 Transformer 全长度胜利（−18% ~ −75%，双口径互证公平）；v3.x 内部消融链；O(1) 状态 + 解码精确性；decay-max-scan 算子的数值正确性（FLA PR #1706）。
+> **架构教训**：在本尺度下，max-scan 三通道占用的容量未能收回其对纯 delta-rule 容量的机会成本——正确训练的 GDN 以 −30% 的差距证明纯门控 delta 路线在该尺度更强。后续方向：(a) max-scan 通道改为严格门控/可裁剪并吸收 GDN 的 per-token β + 归一化配方后再裁决；(b) 或将贡献重心放在算子正确性、O(1) 解码与半环扫描的工程价值上。
 
 | 目标 | 结果 |
 |---|---|
 | 无 KV cache / O(1) 状态 | ✅ 全程保持；解码 fp32 精确 2.1e-05（v3.9 修复后） |
 | 超越 tf（同预算） | ✅ 15000/40000 步 × 全部长度（−18% ~ −75%） |
-| 超越 GDN（同预算） | ⚠️ **已撤回**——基线被 harness bug 削弱，重训后重新裁决 |
+| 超越 GDN（同预算） | ❌ **被正确训练的 GDN 全面反超**（@384 −30%，全长度 GDN 领先） |
 | 超越 v3.5 前代 | ✅ 全长度（−3.9~−4.8%） |
 
-**演进链**：v3.0 84.53 → v3.5 17.82 → v3.6 16.02 → v3.7 15.10 → **full_v37 12.10**（−86%）；tf 同口径 15.48。
+**演进链**：v3.0 84.53 → v3.5 17.82 → v3.6 16.02 → v3.7 15.10 → **full_v37 12.10**（−86%）；同口径：**正确 GDN 8.42**、tf 15.48。
 
 ### Harness bug 记录（教训）
 
-`FlaLMWrapper.forward_loss(ids, targets)` 曾把 `targets=ids[1:]` 直接作为 `labels` 传给 HF CausalLM——HF 内部再做一次 shift（`logits[t] ↔ labels[t+1]`）导致双重位移，模型实际优化"从 ≤t 预测 t+2"的 2-ahead 目标。修复：labels 右滚一位（`labels[t+1] = targets[t]`）。裁决实验：同一窗口上 `out.loss == CE(logits[t], labels[t+1])`（=1.7335）而非 `CE(logits[t], labels[t])`（=8.99），铁证 HF 内部 shift。附带发现：旧 GDN 权重在正确口径下 PPL ≈ 124k，完美解释了此前的"FLA eval-path per-token CE 异常"（那不是 FLA 的 bug，是我们自己的）。
+`FlaLMWrapper.forward_loss(ids, targets)` 曾把 `targets=ids[1:]` 直接作为 `labels` 传给 HF CausalLM——HF 内部再做一次 shift（`logits[t] ↔ labels[t+1]`）导致双重位移，模型实际优化"从 ≤t 预测 t+2"的 2-ahead 目标。修复：labels 右滚一位（`labels[t+1] = targets[t]`）。裁决实验：同一窗口上 `out.loss == CE(logits[t], labels[t+1])`（=1.7335）而非 `CE(logits[t], labels[t])`（=8.99），铁证 HF 内部 shift。附带发现：旧 GDN 权重在正确口径下 PPL ≈ 124k，完美解释了此前的"FLA eval-path per-token CE 异常"（那不是 FLA 的 bug，是我们自己的）。修正后 GDN@3k = 16.86（被削弱版 21.30，差 4.4 PPL）。
 
 ### 剩余边界（如实）
-1. vs GDN 的最终裁决待 `full_gdn_80k_fixed` 重训完成（80000 步等 epoch，进行中）
+1. **vs GDN 的差距 −30%（@384）是当前真实站位**；缩小路径：门控化 max-scan 通道 + 吸收 GDN 配方（per-token β、归一化、无位置编码的纯 delta 状态）
 2. FLA 库依赖仍在快速路径（自研 delta_chunk 已就绪为备选，速度 2-4×）
 3. 验证尺度 488M tokens / 101M 参数；更大规模需扩展算力
 
