@@ -63,6 +63,9 @@ def load_model(key):
             elif key.startswith('scale_v45_15k'):
                 base['kv_dim'] = 96
                 m = OpenASH_V3(**base, moe_ffn=True, state_split=True, mem_heads=4)
+            elif key.startswith('scale_v47_15k'):
+                base['kv_dim'] = 96
+                m = OpenASH_V3(**base, moe_ffn=True, state_split=True, mem_heads=3, gdn_core=True)
             else:
                 m = OpenASH_V3(**base, kv_beta_tok=True, kv_out_gdn=True, no_pos=True)
             m.load_state_dict(torch.load(path, weights_only=True))
