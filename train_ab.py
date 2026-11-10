@@ -46,6 +46,15 @@ def build(arch):
                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
                           kv_dim=48, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, moe_ffn=True, state_split=True)
+    if arch == 'v44':
+        # v4.4: delta 容量扩充（kv_dh 48→96）+ MEM 组扩容（2→3 头），对标 GDN 纯 delta 容量
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3)
     if arch == 'v41':
         return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
                           use_fused=True, use_decay=True,

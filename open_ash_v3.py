@@ -40,7 +40,7 @@ class MaxStateSuper(torch.nn.Module):
                  decay_init=(0.001, 0.15), decay_v_std=0.0,
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False,
                  kv_delta=False, kv_dim=None, kv_backend='sum', kv_beta_init=0.0, kv_beta_tok=False,
-                 em_ref=None, wkey_em=None, state_split=False, kv_out_gdn=False):
+                 em_ref=None, wkey_em=None, state_split=False, kv_out_gdn=False, mem_heads=2):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -51,6 +51,7 @@ class MaxStateSuper(torch.nn.Module):
         self.use_decay = use_decay
         # v4.2: state 三分化——MEM 头组零衰减永久记忆 + 多位读取（aux 读出混入）
         self.state_split = state_split
+        self.mem_heads = mem_heads
         if state_split:
             self.o_read = nn.Parameter(torch.randn(heads, self.kv_dh, self.kv_dh) * 0.02)
             self.o_mix = nn.Parameter(torch.full((heads,), 4.0))   # sigmoid≈0.98 主读出
@@ -231,8 +232,9 @@ class MaxStateSuper(torch.nn.Module):
                         .expand(bx, sx, self.heads).to(qq_f.dtype)
                 if self.state_split:
                     # v4.2: MEM 头组（0:2）零衰减 + β=1 → 永久键值存储（永不遗忘）
-                    g_f = torch.cat([torch.zeros_like(g_f[..., 0:2]), g_f[..., 2:]], dim=-1)
-                    beta_f = torch.cat([torch.ones_like(beta_f[..., 0:2]), beta_f[..., 2:]], dim=-1)
+                    mh = self.mem_heads
+                    g_f = torch.cat([torch.zeros_like(g_f[..., :mh]), g_f[..., mh:]], dim=-1)
+                    beta_f = torch.cat([torch.ones_like(beta_f[..., :mh]), beta_f[..., mh:]], dim=-1)
                 if self.kv_backend == 'delta_chunk':
                     # v3.9: 自研分块实现（纯 torch，autograd 反向；test_delta_chunk.py 全 PASS）
                     from delta_chunk import chunked_delta_rule
@@ -270,8 +272,9 @@ class MaxStateSuper(torch.nn.Module):
                 sv = torch.einsum('bhd,bhdv->bhv', kd, s_kv.to(qq.dtype))
                 if self.state_split:
                     # v4.2: MEM 头组（0:2）在解码侧同样强制零衰减 + β=1（与训练一致）
-                    a_step = torch.cat([torch.ones_like(a_step[..., 0:2]), a_step[..., 2:]], dim=-1)
-                    bd = torch.cat([torch.ones_like(bd[..., 0:2]), bd[..., 2:]], dim=-1)
+                    mh = self.mem_heads
+                    a_step = torch.cat([torch.ones_like(a_step[..., :mh]), a_step[..., mh:]], dim=-1)
+                    bd = torch.cat([torch.ones_like(bd[..., :mh]), bd[..., mh:]], dim=-1)
                 # 锚定 FLA 单 token 语义：S ← a·S + k⊗(β·k − β·a·(kS))（衰减在读出前应用）
                 corr = kd - a_step.unsqueeze(-1) * sv                  # (B,H,D)
                 s_new = a_step[..., None, None] * s_kv.to(qq.dtype) \
@@ -424,7 +427,7 @@ class DecoderLayer(torch.nn.Module):
                  kv_norm_keys=False, kv_beta=False, kv_delta=False, kv_dim=None,
                  kv_backend='sum', kv_beta_init=0.0, short_conv=False, conv_kernel=4, kv_beta_tok=False,
                  em_ref=None, ffn_hidden=None, wkey_em=None, moe_ffn=False,
-                 state_split=False, kv_out_gdn=False):
+                 state_split=False, kv_out_gdn=False, mem_heads=2):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
@@ -433,7 +436,8 @@ class DecoderLayer(torch.nn.Module):
                                                    kv_norm_keys, kv_beta, kv_delta, kv_dim,
                                                    kv_backend, kv_beta_init, kv_beta_tok,
                                                    em_ref=em_ref, wkey_em=wkey_em,
-                                                   state_split=state_split, kv_out_gdn=kv_out_gdn)
+                                                   state_split=state_split, kv_out_gdn=kv_out_gdn,
+                                                   mem_heads=mem_heads)
         if em_ref is not None:
             # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
             fh = ffn_hidden or hidden_size
@@ -553,7 +557,7 @@ class OpenASH_V3(torch.nn.Module):
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False, kv_delta=False,
                  kv_dim=None, kv_backend='sum', kv_beta_init=0.0, short_conv=False, kv_beta_tok=False,
                  em_weights=False, ffn_hidden=None, id_weight=False, wkey_rank=64,
-                 moe_ffn=False, state_split=False, kv_out_gdn=False, no_pos=False):
+                 moe_ffn=False, state_split=False, kv_out_gdn=False, no_pos=False, mem_heads=2):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -576,7 +580,7 @@ class OpenASH_V3(torch.nn.Module):
                           kv_norm_keys, kv_beta, kv_delta, kv_dim, kv_backend, kv_beta_init,
                           short_conv, kv_beta_tok=kv_beta_tok,
                           em_ref=em_ref, ffn_hidden=ffn_hidden, wkey_em=self.wkey_em,
-                          moe_ffn=moe_ffn, state_split=state_split)
+                          moe_ffn=moe_ffn, state_split=state_split, mem_heads=mem_heads)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights
