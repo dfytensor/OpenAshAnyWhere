@@ -64,12 +64,11 @@ class MaxStateSuper(torch.nn.Module):
         self.kv_out_gdn = kv_out_gdn
         if kv_out_gdn:
             self.kv_out_gate = nn.Parameter(torch.ones(dim_size))
-        # v4.6: GDN 核心参数——键扩展投影 + per-token β 投影 + 全宽输出投影 + RMS 直连门
+        # v4.6: GDN 核心参数——键扩展投影 + 全宽输出投影（v47 隔离版：β/输出保持 v44 冠军配方）
         self.kv_out_gate = nn.Parameter(torch.ones(dim_size))
         if gdn_core:
             kd_full = self.kv_dh + self.k_extra
             self.k_extra_proj = nn.Linear(dim_size, heads * self.k_extra, bias=False)
-            self.beta_proj = nn.Linear(dim_size, heads, bias=False)
             self.W_out = nn.Parameter(torch.randn(heads, kd_full, self.kv_dh) * 0.02)
             self.q_proj = nn.Linear(dim_size, heads * kd_full, bias=False)
             self.mem_heads = 3
@@ -82,7 +81,8 @@ class MaxStateSuper(torch.nn.Module):
         #   → 检索到相似历史 token 即取回其嵌入 (归纳头行为); gate 零初始化渐进启用
         self.kv_channel = kv_channel
         if kv_channel:
-            self.q_proj = nn.Linear(dim_size, self.heads * self.kv_dh, bias=False)
+            if not gdn_core:
+                self.q_proj = nn.Linear(dim_size, self.heads * self.kv_dh, bias=False)
             theta0 = math.log(math.expm1(-math.log(kv_decay)))
             self.kv_loga = nn.Parameter(torch.full((heads,), theta0))
             self.kv_gate = nn.Parameter(torch.tensor(0.0))
@@ -197,36 +197,8 @@ class MaxStateSuper(torch.nn.Module):
         qq = None
         if self.kv_channel:
             bx, sx = x.shape[0], x.shape[1]
-            qq = self.q_proj(x).view(bx, sx, self.heads, self.kv_dh).permute(0, 2, 1, 3)
-            log_a = (-torch.nn.functional.softplus(self.kv_loga)).view(1, -1, 1).expand(bx, self.heads, sx)
-            if self.gdn_core and FLA_GDN_OK:
-                # v4.6: GDN 核心前向——键宽 96(c 流)+32(学习扩展)=128，MEM 头组 g=0/β=1 永久化，
-                #       per-token β，RMS 直连输出（无 kv_gate 阻断）；FLA 单调用，状态严格 O(1)
-                xf = x.float()
-                k_x = self.k_extra_proj(xf).view(bx, sx, self.heads, self.k_extra).permute(0, 2, 1, 3).float()
-                cc = c.permute(0, 3, 2, 1)[..., :self.kv_dh].float()
-                kk = torch.cat([cc, k_x], dim=-1)
-                kk = kk / (kk.norm(dim=-1, keepdim=True) + 1e-6)
-                qq = self.q_proj(xf).view(bx, sx, self.heads,
-                                          self.kv_dh + self.k_extra).permute(0, 2, 1, 3).float()
-                beta_f = torch.sigmoid(self.beta_proj(xf)).permute(0, 2, 1).float()
-                g_f = log_a.permute(0, 2, 1).float()
-                mh = self.mem_heads
-                g_f = torch.cat([torch.zeros_like(g_f[..., :mh]), g_f[..., mh:]], dim=-1)
-                beta_f = torch.cat([torch.ones_like(beta_f[..., :mh]), beta_f[..., mh:]], dim=-1)
-                o, s_kv_new = chunk_gated_delta_rule(
-                    q=qq, k=kk, v=kk, g=g_f, beta=beta_f,
-                    initial_state=s_kv, output_final_state=True,
-                    use_qk_l2norm_in_kernel=False)
-                o_out = torch.einsum('bshd,hde->bshe', o, self.W_out.to(o.dtype))  # (B,S,H,d_head)
-                rms = o_out.float().pow(2).mean(-1, keepdim=True).add_(1e-6).rsqrt().to(o_out.dtype)
-                out_l = out_l + (o_out * rms * self.kv_out_gate.view(1, 1, 1, -1)
-                                 .to(o_out.dtype)).permute(0, 3, 1, 2).to(out_l.dtype)
-                r = None
-                if self.kv_channel:
-                    return out_l, (e[:, :, -1:], s_kv_new)
-                return out_l, e[:, :, -1:]
-            qq = self.q_proj(x).view(bx, sx, self.heads, self.kv_dh).permute(0, 2, 1, 3)
+            if not self.gdn_core:
+                qq = self.q_proj(x).view(bx, sx, self.heads, self.kv_dh).permute(0, 2, 1, 3)
         infer_mode = (not torch.is_grad_enabled()) and _fused_available(c) and self.use_fused
         if infer_mode:
             e = tops._CumMaxFn.apply(c, e_st, dv, db)
@@ -246,6 +218,38 @@ class MaxStateSuper(torch.nn.Module):
             else:
                 out_l = self.gen_model(out, out1, c, out3, e)
         s_kv_new = None
+        if self.gdn_core and FLA_GDN_OK and self.kv_channel:
+            # v4.7: 键宽隔离实验——128 维键（96 c 流 + 32 学习扩展），其余保持 v44 冠军配方
+            #       （kv_gate 渐进标量门 + per-head 标量 β + MEM 头组 g=0/β=1 强制）
+            bx, sx = b, s
+            xf = x.float()
+            k_x = self.k_extra_proj(xf).view(b, sx, self.heads, self.k_extra).permute(0, 2, 1, 3)
+            cc = c.permute(0, 3, 2, 1)[..., :self.kv_dh]
+            kk = torch.cat([cc, k_x], dim=-1)
+            kk = kk / (kk.norm(dim=-1, keepdim=True) + 1e-6)
+            qq = self.q_proj(x).view(b, sx, self.heads,
+                                     self.kv_dh + self.k_extra).permute(0, 2, 1, 3)
+            beta_f = torch.sigmoid(self.kv_beta_fla).view(1, 1, -1)\
+                .expand(b, sx, self.heads)
+            log_a = (-torch.nn.functional.softplus(self.kv_loga)).view(1, -1, 1)\
+                .expand(b, self.heads, sx)
+            g_f = log_a.permute(0, 2, 1).clone()                # (B,S,H)
+            g_f[..., :self.mem_heads] = 0.0                     # MEM 头组零衰减
+            beta_f = torch.cat([torch.ones_like(beta_f[..., :self.mem_heads]),
+                                beta_f[..., self.mem_heads:]], dim=-1)
+            from delta_chunk import chunked_delta_rule
+            o, s_kv_new = chunked_delta_rule(
+                qq.permute(0, 2, 1, 3).float(), kk.permute(0, 2, 1, 3).float(),
+                kk.permute(0, 2, 1, 3).float(), g_f.float(), beta_f.float(),
+                initial_state=s_kv, output_final_state=True)
+            o_out = torch.einsum('bshd,hde->bshe', o, self.W_out.to(o.dtype))  # (B,S,H,d_head)
+            o_p = o_out.permute(0, 3, 1, 2)                       # (B,d_head,S,H)
+            out_l = out_l + self._kv_out(o_p)
+            r = None
+            out = out_l.transpose(1, 2).contiguous().view(b, s, d)
+            if self.kv_channel:
+                return out, (e[:, :, -1:], s_kv_new)
+            return out, e[:, :, -1:]
         if qq is not None:
             cc_perm = c.permute(0, 3, 2, 1)
             if self.kv_dh < self.d_head:
@@ -479,7 +483,7 @@ class DecoderLayer(torch.nn.Module):
                                                    kv_backend, kv_beta_init, kv_beta_tok,
                                                    em_ref=em_ref, wkey_em=wkey_em,
                                                    state_split=state_split, kv_out_gdn=kv_out_gdn,
-                                                   mem_heads=mem_heads)
+                                                   mem_heads=mem_heads, gdn_core=gdn_core)
         if em_ref is not None:
             # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
             fh = ffn_hidden or hidden_size
