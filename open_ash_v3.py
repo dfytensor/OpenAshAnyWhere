@@ -40,7 +40,8 @@ class MaxStateSuper(torch.nn.Module):
                  decay_init=(0.001, 0.15), decay_v_std=0.0,
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False,
                  kv_delta=False, kv_dim=None, kv_backend='sum', kv_beta_init=0.0, kv_beta_tok=False,
-                 em_ref=None, wkey_em=None, state_split=False, kv_out_gdn=False, mem_heads=2):
+                 em_ref=None, wkey_em=None, state_split=False, kv_out_gdn=False, mem_heads=2,
+                 gdn_core=False, k_extra=32):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -52,6 +53,10 @@ class MaxStateSuper(torch.nn.Module):
         # v4.2: state 三分化——MEM 头组零衰减永久记忆 + 多位读取（aux 读出混入）
         self.state_split = state_split
         self.mem_heads = mem_heads
+        # v4.6: GDN 核心——键宽突破 c 流上限（96 c 流 + 32 学习扩展 = 128），MEM 头组永久化，
+        #       per-token β，RMS 直连输出（无 kv_gate 阻断）
+        self.gdn_core = gdn_core
+        self.k_extra = k_extra if gdn_core else 0
         if state_split:
             self.o_read = nn.Parameter(torch.randn(heads, self.kv_dh, self.kv_dh) * 0.02)
             self.o_mix = nn.Parameter(torch.full((heads,), 4.0))   # sigmoid≈0.98 主读出
@@ -59,6 +64,15 @@ class MaxStateSuper(torch.nn.Module):
         self.kv_out_gdn = kv_out_gdn
         if kv_out_gdn:
             self.kv_out_gate = nn.Parameter(torch.ones(dim_size))
+        # v4.6: GDN 核心参数——键扩展投影 + per-token β 投影 + 全宽输出投影 + RMS 直连门
+        self.kv_out_gate = nn.Parameter(torch.ones(dim_size))
+        if gdn_core:
+            kd_full = self.kv_dh + self.k_extra
+            self.k_extra_proj = nn.Linear(dim_size, heads * self.k_extra, bias=False)
+            self.beta_proj = nn.Linear(dim_size, heads, bias=False)
+            self.W_out = nn.Parameter(torch.randn(heads, kd_full, self.kv_dh) * 0.02)
+            self.q_proj = nn.Linear(dim_size, heads * kd_full, bias=False)
+            self.mem_heads = 3
         assert dim_size % heads == 0, "Dimension size must be divisible by head size."
         # v4.0: combined 投影由 em 变换得到（W = A @ em 切片，与输入嵌入共享梯度）
         self.em_ref = em_ref
@@ -185,6 +199,34 @@ class MaxStateSuper(torch.nn.Module):
             bx, sx = x.shape[0], x.shape[1]
             qq = self.q_proj(x).view(bx, sx, self.heads, self.kv_dh).permute(0, 2, 1, 3)
             log_a = (-torch.nn.functional.softplus(self.kv_loga)).view(1, -1, 1).expand(bx, self.heads, sx)
+            if self.gdn_core and FLA_GDN_OK:
+                # v4.6: GDN 核心前向——键宽 96(c 流)+32(学习扩展)=128，MEM 头组 g=0/β=1 永久化，
+                #       per-token β，RMS 直连输出（无 kv_gate 阻断）；FLA 单调用，状态严格 O(1)
+                xf = x.float()
+                k_x = self.k_extra_proj(xf).view(bx, sx, self.heads, self.k_extra).permute(0, 2, 1, 3).float()
+                cc = c.permute(0, 3, 2, 1)[..., :self.kv_dh].float()
+                kk = torch.cat([cc, k_x], dim=-1)
+                kk = kk / (kk.norm(dim=-1, keepdim=True) + 1e-6)
+                qq = self.q_proj(xf).view(bx, sx, self.heads,
+                                          self.kv_dh + self.k_extra).permute(0, 2, 1, 3).float()
+                beta_f = torch.sigmoid(self.beta_proj(xf)).permute(0, 2, 1).float()
+                g_f = log_a.permute(0, 2, 1).float()
+                mh = self.mem_heads
+                g_f = torch.cat([torch.zeros_like(g_f[..., :mh]), g_f[..., mh:]], dim=-1)
+                beta_f = torch.cat([torch.ones_like(beta_f[..., :mh]), beta_f[..., mh:]], dim=-1)
+                o, s_kv_new = chunk_gated_delta_rule(
+                    q=qq, k=kk, v=kk, g=g_f, beta=beta_f,
+                    initial_state=s_kv, output_final_state=True,
+                    use_qk_l2norm_in_kernel=False)
+                o_out = torch.einsum('bshd,hde->bshe', o, self.W_out.to(o.dtype))  # (B,S,H,d_head)
+                rms = o_out.float().pow(2).mean(-1, keepdim=True).add_(1e-6).rsqrt().to(o_out.dtype)
+                out_l = out_l + (o_out * rms * self.kv_out_gate.view(1, 1, 1, -1)
+                                 .to(o_out.dtype)).permute(0, 3, 1, 2).to(out_l.dtype)
+                r = None
+                if self.kv_channel:
+                    return out_l, (e[:, :, -1:], s_kv_new)
+                return out_l, e[:, :, -1:]
+            qq = self.q_proj(x).view(bx, sx, self.heads, self.kv_dh).permute(0, 2, 1, 3)
         infer_mode = (not torch.is_grad_enabled()) and _fused_available(c) and self.use_fused
         if infer_mode:
             e = tops._CumMaxFn.apply(c, e_st, dv, db)
@@ -427,7 +469,7 @@ class DecoderLayer(torch.nn.Module):
                  kv_norm_keys=False, kv_beta=False, kv_delta=False, kv_dim=None,
                  kv_backend='sum', kv_beta_init=0.0, short_conv=False, conv_kernel=4, kv_beta_tok=False,
                  em_ref=None, ffn_hidden=None, wkey_em=None, moe_ffn=False,
-                 state_split=False, kv_out_gdn=False, mem_heads=2):
+                 state_split=False, kv_out_gdn=False, mem_heads=2, gdn_core=False):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
@@ -557,7 +599,8 @@ class OpenASH_V3(torch.nn.Module):
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False, kv_delta=False,
                  kv_dim=None, kv_backend='sum', kv_beta_init=0.0, short_conv=False, kv_beta_tok=False,
                  em_weights=False, ffn_hidden=None, id_weight=False, wkey_rank=64,
-                 moe_ffn=False, state_split=False, kv_out_gdn=False, no_pos=False, mem_heads=2):
+                 moe_ffn=False, state_split=False, kv_out_gdn=False, no_pos=False, mem_heads=2,
+                 gdn_core=False):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -580,7 +623,8 @@ class OpenASH_V3(torch.nn.Module):
                           kv_norm_keys, kv_beta, kv_delta, kv_dim, kv_backend, kv_beta_init,
                           short_conv, kv_beta_tok=kv_beta_tok,
                           em_ref=em_ref, ffn_hidden=ffn_hidden, wkey_em=self.wkey_em,
-                          moe_ffn=moe_ffn, state_split=state_split, mem_heads=mem_heads)
+                          moe_ffn=moe_ffn, state_split=state_split, mem_heads=mem_heads,
+                          gdn_core=gdn_core)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights
