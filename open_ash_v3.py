@@ -274,12 +274,6 @@ class MaxStateSuper(torch.nn.Module):
                 kk_f = kk.permute(0, 2, 1, 3).float()        # (B,S,H,kv_dh) 归一化键
                 vv_f = kk_f.float()                          # delta 写入 v = k
                 g_f = log_a.permute(0, 2, 1).float()         # (B,S,H) log 域衰减
-                if self.mem_force:
-                    # v4.8: MEM 头组（0:3）g=0 + β=1 → 零衰减全覆盖永久键值存储（头组分化）
-                    g_f = torch.cat([torch.zeros_like(g_f[..., :self.mem_heads]),
-                                     g_f[..., self.mem_heads:]], dim=-1)
-                    beta_f = torch.cat([torch.ones_like(beta_f[..., :self.mem_heads]),
-                                        beta_f[..., self.mem_heads:]], dim=-1)
                 if getattr(self, 'kv_beta_tok', False):
                     # v3.8: per-token β（fp32 einsum，kk_f 已归一化）
                     beta_f = torch.sigmoid(
@@ -504,7 +498,7 @@ class DecoderLayer(torch.nn.Module):
             self.ffn = EmFeedForward(hidden_size, fh, em_ref, ffn_act)
         elif moe_ffn:
             self.ffn = MoEFeedForward(hidden_size, ffn_act, num_experts=4, topk=2,
-                                      expert_hidden=hidden_size // 2)
+                                      expert_hidden=(ffn_hidden or hidden_size) // 2)
         else:
             self.ffn = FeedForward(hidden_size, ffn_act)
         self.layer_norm = torch.nn.LayerNorm(hidden_size)
