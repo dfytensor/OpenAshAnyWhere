@@ -55,6 +55,16 @@ def build(arch):
                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
                           kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, gdn_core=True, k_extra=16)
+    if arch == 'v48':
+        # v4.8: MEM 头组（0:3）永久存储强制——g=0 + β=1 零衰减全覆盖（头组分化核心验证）
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True)
     if arch == 'v47':
         # v4.7: 键宽隔离实验——v44 冠军配方 + 128 维键（96 c 流 + 32 学习扩展）
         return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
@@ -82,7 +92,8 @@ def build(arch):
                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
                           kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
-                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3)
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True)
     if arch == 'v41':
         return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
                           use_fused=True, use_decay=True,
