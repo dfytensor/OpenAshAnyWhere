@@ -609,7 +609,7 @@ class OpenASH_V3(torch.nn.Module):
                  pre_norm=False, ffn_act="relu", decay_init=(0.001, 0.15), decay_v_std=0.0,
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False, kv_delta=False,
                  kv_dim=None, kv_backend='sum', kv_beta_init=0.0, short_conv=False, kv_beta_tok=False,
-                 em_weights=False, ffn_hidden=None, id_weight=False, wkey_rank=64,
+                 em_weights=False, ffn_hidden=None, id_weight=False, wkey_rank=64, tied_head=False,
                  moe_ffn=False, state_split=False, kv_out_gdn=False, no_pos=False, mem_heads=2,
                  gdn_core=False, mem_force=False):
         super(OpenASH_V3, self).__init__()
@@ -639,10 +639,16 @@ class OpenASH_V3(torch.nn.Module):
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights
+        self.tied_head = tied_head
         self.no_pos = no_pos
         if em_weights:
             self.head_score = None
             self._head_weight = self.em.weight
+        elif tied_head:
+            self.head_score = None
+            self._head_weight = self.em.weight
+            self.logit_scale = nn.Parameter(torch.tensor(float(hidden_size) ** -0.5))
+            self.logit_scale = nn.Parameter(torch.tensor(float(hidden_size) ** -0.5))
         else:
             self.head_score = nn.Linear(hidden_size, voc_size, bias=False)
 
@@ -665,19 +671,20 @@ class OpenASH_V3(torch.nn.Module):
 
     def forward(self, x, state=None, pos_offset=0):
         x, state = self._hidden(x, state, pos_offset)
-        if self.em_weights_tied:
-            return x @ self._head_weight.t(), state
+        if self.em_weights_tied or self.tied_head:
+            return x @ self._head_weight.t() * self.logit_scale, state
         return self.head_score(x), state
 
     def forward_loss(self, ids, targets, state=None, pos_offset=0, fused_ce=True):
         """训练用：hidden → fused CE，跳过 [N, V] logits 物化。targets 为下一 token id。"""
         x, state = self._hidden(ids, state, pos_offset)
-        w = self._head_weight if self.em_weights_tied else self.head_score.weight
+        w = self._head_weight if (self.em_weights_tied or self.tied_head) else self.head_score.weight
+        logit_scale = self.logit_scale if (self.em_weights_tied or self.tied_head) else 1.0
         if fused_ce:
-            loss = FusedCrossEntropy.apply(x.reshape(-1, x.shape[-1]), w,
+            loss = FusedCrossEntropy.apply(x.reshape(-1, x.shape[-1]) * logit_scale, w,
                                            targets.reshape(-1), self.ce_chunk)
         else:
-            logits = x @ w.t()
+            logits = x @ w.t() * logit_scale
             loss = torch.nn.functional.cross_entropy(
                 logits.reshape(-1, logits.shape[-1]).float(), targets.reshape(-1))
         return loss, state
