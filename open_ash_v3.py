@@ -67,7 +67,6 @@ class MaxStateSuper(torch.nn.Module):
         if kv_out_gdn:
             self.kv_out_gate = nn.Parameter(torch.ones(dim_size))
         # v4.6: GDN 核心参数——键扩展投影 + 全宽输出投影（v47 隔离版：β/输出保持 v44 冠军配方）
-        self.kv_out_gate = nn.Parameter(torch.ones(dim_size))
         if gdn_core:
             kd_full = self.kv_dh + self.k_extra
             self.k_extra_proj = nn.Linear(dim_size, heads * self.k_extra, bias=False)
