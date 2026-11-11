@@ -237,11 +237,14 @@ class MaxStateSuper(torch.nn.Module):
             g_f[..., :self.mem_heads] = 0.0                     # MEM 头组零衰减
             beta_f = torch.cat([torch.ones_like(beta_f[..., :self.mem_heads]),
                                 beta_f[..., self.mem_heads:]], dim=-1)
-            from delta_chunk import chunked_delta_rule
-            o, s_kv_new = chunked_delta_rule(
-                qq.permute(0, 2, 1, 3).float(), kk.permute(0, 2, 1, 3).float(),
-                kk.permute(0, 2, 1, 3).float(), g_f.float(), beta_f.float(),
-                initial_state=s_kv, output_final_state=True)
+            # v4.7 修正：统一 bf16 传入 FLA（GDN 常规用法；fp32 会触发 kkt kernel IMA）
+            kd_t = kk.permute(0, 2, 1, 3).to(torch.bfloat16)
+            o, s_kv_new = chunk_gated_delta_rule(
+                q=qq.permute(0, 2, 1, 3).to(torch.bfloat16), k=kd_t, v=kd_t,
+                g=g_f.permute(0, 2, 1).to(torch.bfloat16),
+                beta=beta_f.permute(0, 2, 1).to(torch.bfloat16),
+                initial_state=s_kv, output_final_state=True,
+                use_qk_l2norm_in_kernel=False)
             o_out = torch.einsum('bshd,hde->bshe', o, self.W_out.to(o.dtype))  # (B,S,H,d_head)
             o_p = o_out.permute(0, 3, 1, 2)                       # (B,d_head,S,H)
             out_l = out_l + self._kv_out(o_p)
