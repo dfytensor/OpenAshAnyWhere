@@ -1,0 +1,12 @@
+[v47] params: 132,952,056
+[v47] step     1 | loss 10.229 | lr 6.00e-07 | 12147 ms/step
+[v47] step   100 | loss 8.679 | lr 6.00e-05 | 15640 ms/step
+[v47] step   200 | loss 5.857 | lr 1.20e-04 | 15915 ms/step
+[v47] step   300 | loss 5.185 | lr 1.80e-04 | 16006 ms/step
+[v47] step   400 | loss 4.835 | lr 2.40e-04 | 16108 ms/step
+[v47] step   500 | loss 4.568 | lr 3.00e-04 | 16145 ms/step
+[v47] step   600 | loss 4.753 | lr 3.00e-04 | 16180 ms/step
+[v47] step   700 | loss 4.492 | lr 3.00e-04 | 16296 ms/step
+[v47] step   800 | loss 4.381 | lr 3.00e-04 | 22764 ms/step
+[v47] step   900 | loss 4.514 | lr 2.99e-04 | 28204 ms/step
+[v47] step  1000 | loss 4.301 | lr 2.99e-04 | 32422 ms/step

@@ -1,0 +1,94 @@
+[v47] params: 132,942,840
+Traceback (most recent call last):
+  File "/mnt/f/OpenASH2605/train_ab.py", line 324, in <module>
+    main()
+  File "/mnt/f/OpenASH2605/train_ab.py", line 301, in main
+    loss, _ = model.forward_loss(batch[:, :-1], batch[:, 1:], fused_ce=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/open_ash_v3.py", line 674, in forward_loss
+    x, state = self._hidden(ids, state, pos_offset)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/open_ash_v3.py", line 660, in _hidden
+    x1, state[i] = decoder_layer(x, ids, state[i])
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/open_ash_v3.py", line 546, in forward
+    x1, sub_state = self.self_attention_linear(xn, ids, sub_state)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/open_ash_v3.py", line 244, in forward
+    o, s_kv_new = chunk_gated_delta_rule(
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py", line 1263, in _fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/fla/backends.py", line 200, in wrapper
+    return default_function(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/fla/ops/gated_delta_rule/chunk.py", line 571, in chunk_gated_delta_rule
+    o, final_state = ChunkGatedDeltaRuleFunction.apply(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/torch/autograd/function.py", line 596, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/fla/utils/decorators.py", line 152, in wrapper
+    return fn(*processed_args, **processed_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/torch/amp/autocast_mode.py", line 481, in decorate_fwd
+    return fwd(*args, **kwargs)  # pyrefly: ignore [not-callable]
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/fla/ops/gated_delta_rule/chunk.py", line 292, in forward
+    g, o, A, final_state, initial_state, g_input = chunk_gated_delta_rule_fwd(
+                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/fla/ops/gated_delta_rule/chunk.py", line 72, in chunk_gated_delta_rule_fwd
+    w, u, A = chunk_gated_delta_rule_fwd_intra(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py", line 1263, in _fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/fla/backends.py", line 200, in wrapper
+    return default_function(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/fla/ops/gated_delta_rule/chunk_fwd.py", line 386, in chunk_gated_delta_rule_fwd_intra
+    chunk_gated_delta_rule_fwd_kkt_solve_kernel[(NT, B * HV)](
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/triton/runtime/jit.py", line 370, in <lambda>
+    return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/triton/runtime/autotuner.py", line 459, in run
+    return self.fn.run(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/fla/ops/utils/cache.py", line 378, in run
+    return super().run(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/triton/runtime/autotuner.py", line 238, in run
+    used_cached_result = self.check_disk_cache(key, pruned_configs, benchmark)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/triton/runtime/autotuner.py", line 202, in check_disk_cache
+    bench_fn()
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/triton/runtime/autotuner.py", line 229, in benchmark
+    timings = {config: self._bench(*args, config=config, **kwargs) for config in pruned_configs}
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/triton/runtime/autotuner.py", line 164, in _bench
+    return self.do_bench(kernel_call, quantiles=(0.5, 0.2, 0.8))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/triton/testing.py", line 150, in do_bench
+    di.synchronize()
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/torch/cuda/__init__.py", line 1162, in synchronize
+    return torch._C._cuda_synchronize()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+

@@ -49,7 +49,7 @@ def load_model(key):
         # v4.2/v4.3 分支（独立构建）
         if key.startswith('scale_v42_15k') or key.startswith('scale_v43_15k') \
                 or key.startswith('scale_v44_15k') or key.startswith('scale_v45_15k') \
-                or key.startswith('scale_v49_15k'):
+                or key.startswith('scale_v49_15k') or key.startswith('scale_v50_15k'):
             torch.manual_seed(2024)
             base = dict(voc_size=VOC, hidden_size=HID, num_heads=HEADS, num_layers=LAYERS,
                         max_seq_len=2048, model_flag='train', use_fused=True, use_decay=True,
@@ -78,6 +78,18 @@ def load_model(key):
                     torch.load(os.path.join(key, 'model.pt'), weights_only=True),
                     strict=False)
                 m = mm
+                return m.cuda()
+            elif key.startswith('scale_v50_15k'):
+                m = OpenASH_V3(23004, 1024, 8, 6, max_seq_len=2048, model_flag='train',
+                               use_fused=True, use_decay=True,
+                               pre_norm=True, ffn_act='silu',
+                               decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                               kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                               kv_dim=128, kv_backend='delta_fla', kv_beta_init=4.0,
+                               short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                               mem_force=True, ffn_hidden=2048)
+                m.load_state_dict(torch.load(path, weights_only=True), strict=False)
+                m.eval()
                 return m.cuda()
                 return m.cuda()
             elif key.startswith('scale_v47_15k'):
@@ -168,7 +180,7 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['scale_v37_15k', 'scale_v42_15k', 'scale_v44_15k', 'scale_v49_15k', 'big_tf']
+MODEL_KEYS = ['scale_v37_15k', 'scale_v42_15k', 'scale_v44_15k', 'scale_v49_15k', 'scale_v50_15k', 'big_tf']
 models = {k: load_model(k) for k in MODEL_KEYS}
 wrapper_keys = {k for k in MODEL_KEYS if not hasattr(models[k], 'decoder_layers')}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]
