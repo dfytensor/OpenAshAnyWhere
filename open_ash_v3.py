@@ -41,7 +41,7 @@ class MaxStateSuper(torch.nn.Module):
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False,
                  kv_delta=False, kv_dim=None, kv_backend='sum', kv_beta_init=0.0, kv_beta_tok=False,
                  em_ref=None, wkey_em=None, state_split=False, kv_out_gdn=False, mem_heads=2,
-                 gdn_core=False, k_extra=32, mem_force=False, asym_delta=False):
+                 gdn_core=False, k_extra=32, mem_force=False, asym_delta=False, mem_extra=False):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -75,6 +75,12 @@ class MaxStateSuper(torch.nn.Module):
                 torch.randn(self.write_heads, self.write_dim, self.mem_dim) * 0.02)
             self.o_gate_mem = nn.Parameter(torch.ones(self.mem_heads, self.mem_dim))
             self.o_gate_write = nn.Parameter(torch.ones(self.write_heads, self.mem_dim))
+        # v5.3M: 专用 MEM 永久组（v53 冠军配方之上的增量隔离）——c 流键 g=0/β=1，专用 q_mem，
+        #        输出经 ones-init 门进 MEM 头槽位（前三头）；标准通路完全不动
+        self.mem_extra = mem_extra
+        if mem_extra:
+            self.q_mem = nn.Linear(dim_size, self.mem_heads * self.kv_dh, bias=False)
+            self.o_gate_mem = nn.Parameter(torch.ones(self.mem_heads, self.kv_dh))
         self.k_extra = k_extra if gdn_core else 0
         if state_split:
             self.o_read = nn.Parameter(torch.randn(heads, self.kv_dh, self.kv_dh) * 0.02)
@@ -213,6 +219,10 @@ class MaxStateSuper(torch.nn.Module):
             e_st, s_kv = state
         else:
             e_st, s_kv = state, None
+        # v5.3M: s_kv 槽位可能是 (S_std, S_mem_extra) 双组打包——标准通路取张量，MEM 状态另存
+        S_mem_prev = None
+        if self.mem_extra and isinstance(s_kv, tuple):
+            s_kv, S_mem_prev = s_kv
         qq = None
         if self.kv_channel:
             bx, sx = x.shape[0], x.shape[1]
@@ -427,6 +437,40 @@ class MaxStateSuper(torch.nn.Module):
                     rp = F.pad(rp, (0, 0, 0, self.d_head - self.kv_dh))
                 out_l = out_l + self._kv_out(rp.unsqueeze(2))
 
+            if self.mem_extra:
+                # v5.3M: 专用 MEM 永久组——c 流键（前三头）、g=0/β=1、专用 q_mem 查询。
+                #   训练/首 token 走 chunk 调用；单步解码走手工 O(1) 更新（与标准通路同约定）。
+                c_m = c.permute(0, 3, 2, 1).float()[..., :self.kv_dh]      # (B,H,S,kv_dh)
+                k3 = c_m[:, :self.mem_heads].permute(0, 2, 1, 3).float()   # (B,S,3,kv_dh)
+                k3 = k3 / (k3.norm(dim=-1, keepdim=True) + 1e-6)
+                k3 = k3 * self.kv_beta.to(k3.dtype).view(1, 1, -1, 1)[:, :, :self.mem_heads]
+                q3 = self.q_mem(x).view(b, s, self.mem_heads, self.kv_dh).float()
+                if s == 1 and S_mem_prev is not None:
+                    # 单步解码：S ← S + k̂⊗(k̂ − k̂·S)（a=1, β=1，k̂ 含标量 β 缩放），读出补 K^−0.5
+                    kd = k3.squeeze(1)                                     # (B,3,kv_dh)
+                    sm = S_mem_prev.to(kd.dtype)                           # (B,3,K,V)
+                    sv = torch.einsum('bhd,bhdv->bhv', kd, sm)
+                    corr = kd - sv
+                    S_mem_new = sm + kd.unsqueeze(-1) * corr.unsqueeze(-2)
+                    r3 = torch.einsum('bhd,bhdv->bhv', q3.squeeze(1), S_mem_new) \
+                        * float(self.kv_dh) ** -0.5
+                    o3 = r3.unsqueeze(1)                                   # (B,1,3,kv_dh)
+                else:
+                    g3 = x.new_zeros(b, s, self.mem_heads, dtype=k3.dtype)
+                    b3 = torch.ones(b, s, self.mem_heads, device=x.device, dtype=k3.dtype)
+                    o3, S_mem_new = chunk_gated_delta_rule(
+                        q=q3, k=k3, v=k3, g=g3, beta=b3,
+                        initial_state=S_mem_prev, output_final_state=True,
+                        use_qk_l2norm_in_kernel=False)
+                s_kv_new = (s_kv_new, S_mem_new)                 # 双组打包进同一状态槽
+                o3g = self.o_gate_mem.to(o3.dtype).view(1, 1, self.mem_heads, self.kv_dh) * o3
+                o3p = o3g.permute(0, 3, 1, 2)                    # (B,kv_dh,S,3)
+                if self.kv_dh < self.d_head:
+                    o3p = F.pad(o3p, (0, 0, 0, 0, 0, self.d_head - self.kv_dh))
+                # 全 out-of-place 组合（in-place 切片对 autograd 版本计数有风险）
+                head_new = out_l[:, :, :, :self.mem_heads] + o3p.to(out_l.dtype)
+                out_l = torch.cat([head_new, out_l[:, :, :, self.mem_heads:]], dim=3)
+
         out = out_l.transpose(1, 2).contiguous().view(b, s, d)
 
         if self.kv_channel:
@@ -544,7 +588,7 @@ class DecoderLayer(torch.nn.Module):
                  kv_backend='sum', kv_beta_init=0.0, short_conv=False, conv_kernel=4, kv_beta_tok=False,
                  em_ref=None, ffn_hidden=None, wkey_em=None, moe_ffn=False,
                  state_split=False, kv_out_gdn=False, mem_heads=2, gdn_core=False,
-                 mem_force=False, asym_delta=False):
+                 mem_force=False, asym_delta=False, mem_extra=False):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
@@ -555,7 +599,8 @@ class DecoderLayer(torch.nn.Module):
                                                    em_ref=em_ref, wkey_em=wkey_em,
                                                    state_split=state_split, kv_out_gdn=kv_out_gdn,
                                                    mem_heads=mem_heads, gdn_core=gdn_core,
-                                                   mem_force=mem_force, asym_delta=asym_delta)
+                                                   mem_force=mem_force, asym_delta=asym_delta,
+                                                   mem_extra=mem_extra)
         if em_ref is not None:
             # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
             fh = ffn_hidden or hidden_size
@@ -676,7 +721,7 @@ class OpenASH_V3(torch.nn.Module):
                  kv_dim=None, kv_backend='sum', kv_beta_init=0.0, short_conv=False, kv_beta_tok=False,
                  em_weights=False, ffn_hidden=None, id_weight=False, wkey_rank=64, tied_head=False,
                  moe_ffn=False, state_split=False, kv_out_gdn=False, no_pos=False, mem_heads=2,
-                 gdn_core=False, mem_force=False, asym_delta=False):
+                 gdn_core=False, mem_force=False, asym_delta=False, mem_extra=False):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -701,7 +746,8 @@ class OpenASH_V3(torch.nn.Module):
                           em_ref=em_ref, ffn_hidden=ffn_hidden, wkey_em=self.wkey_em,
                           moe_ffn=moe_ffn, state_split=state_split, mem_heads=mem_heads,
                           kv_out_gdn=kv_out_gdn,
-                          gdn_core=gdn_core, mem_force=mem_force, asym_delta=asym_delta)
+                          gdn_core=gdn_core, mem_force=mem_force, asym_delta=asym_delta,
+                          mem_extra=mem_extra)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights

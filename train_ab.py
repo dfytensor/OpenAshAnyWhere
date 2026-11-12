@@ -109,6 +109,19 @@ def build(arch):
                           kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
                           mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True)
+    if arch == 'v53m':
+        # v5.3M: v53 冠军配方 + 专用 MEM 永久组增量隔离——c 流键 g=0/β=1、专用 q_mem、
+        #        ones-init 门进 MEM 头槽位；标准通路不动（参数 ~118.7M，+1.3M 如实披露）。
+        #        动机：v54 在 gap=128 召回 +0.93（家族最佳）但整体负——隔离长距收益不带 WRITE 宽键
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
+                          mem_extra=True)
     if arch == 'v54':
         # v5.4: 非对称双组 kv192——MEM 3×96 永久组 + WRITE 5×128 学习键组（两调用）
         return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
