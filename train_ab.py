@@ -75,6 +75,36 @@ def build(arch):
                           kv_dim=128, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
                           mem_force=True, ffn_hidden=2048)
+    if arch == 'v52':
+        # v5.2: 恒开门单变量——KV 输出 RMS+per-channel 门（去除 kv_gate=0 阻断）
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          kv_out_gdn=True)
+    if arch == 'v53':
+        # v5.3: per-token β 直连单变量（sigmoid(w·k̂+b)，恒开下不被阻断）
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          kv_out_gdn=True, kv_beta_tok=True)
+    if arch == 'v54':
+        # v5.4: 非对称双组 kv192——MEM 3×96 永久组 + WRITE 5×128 学习键组（两调用）
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          kv_out_gdn=True, asym_delta=True)
     if arch == 'v49':
         # v4.9: 肥层集中实验——6 层 × 专家 1024（总参数与 v44 持平），对标 GDN 5 层肥层集中
         return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',

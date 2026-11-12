@@ -79,6 +79,42 @@ def load_model(key):
                     strict=False)
                 m = mm
                 return m.cuda()
+            elif key.startswith('scale_v52_15k'):
+                m = OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                               use_fused=True, use_decay=True,
+                               pre_norm=True, ffn_act='silu',
+                               decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                               kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                               kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                               short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                               kv_out_gdn=True)
+                m.load_state_dict(torch.load(path, weights_only=True), strict=False)
+                m.eval()
+                return m.cuda()
+            elif key.startswith('scale_v53_15k'):
+                m = OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                               use_fused=True, use_decay=True,
+                               pre_norm=True, ffn_act='silu',
+                               decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                               kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                               kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                               short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                               kv_out_gdn=True, kv_beta_tok=True)
+                m.load_state_dict(torch.load(path, weights_only=True), strict=False)
+                m.eval()
+                return m.cuda()
+            elif key.startswith('scale_v54_15k'):
+                m = OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                               use_fused=True, use_decay=True,
+                               pre_norm=True, ffn_act='silu',
+                               decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                               kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                               kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                               short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                               kv_out_gdn=True, asym_delta=True)
+                m.load_state_dict(torch.load(path, weights_only=True), strict=False)
+                m.eval()
+                return m.cuda()
             elif key.startswith('scale_v50_15k'):
                 m = OpenASH_V3(23004, 1024, 8, 6, max_seq_len=2048, model_flag='train',
                                use_fused=True, use_decay=True,
