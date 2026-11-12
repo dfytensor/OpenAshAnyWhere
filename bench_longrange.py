@@ -157,7 +157,8 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['scale_v37_15k', 'scale_v44_15k', 'scale_v48_15k', 'big_tf']
+MODEL_KEYS = ['scale_v49_15k', 'scale_v50_15k', 'scale_v52_15k', 'scale_v53_15k',
+              'scale_v54_15k', 'big_tf']
 models = {k: load_model(k) for k in MODEL_KEYS}
 wrapper_keys = {k for k in MODEL_KEYS if not hasattr(models[k], 'decoder_layers')}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]
