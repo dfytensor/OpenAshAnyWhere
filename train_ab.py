@@ -77,6 +77,17 @@ def build(arch):
                           kv_dim=128, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
                           mem_force=True, ffn_hidden=2048)
+    if arch == 'v53l':
+        # v5.3L: v53 冠军通路（恒开门 kv_out_gdn + per-token β）回灌 v50 容量骨架
+        #       （hidden 1024 / d_head 128 / kv128 / 6 层肥层 FFN2048 / MEM 3/8）——容量与通路合体验证
+        return OpenASH_V3(23004, 1024, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=128, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True)
     if arch == 'v52':
         # v5.2: 恒开门单变量——KV 输出 RMS+per-channel 门（去除 kv_gate=0 阻断）
         #       （v49 冠军基座 6L×FFN2048 + 唯一变量 kv_out_gdn）
