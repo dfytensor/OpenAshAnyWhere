@@ -31,13 +31,15 @@ def build(arch):
                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
                           kv_dim=48, kv_backend='delta_fla', kv_beta_init=4.0)
     if arch == 'v43':
+        # 历史对齐注：scale_v43_15k checkpoint 无 kv_out_gate（训练时该机制未生效/未创建），
+        # kv_out_gdn 必须为 False——否则探针会走上训练从未见过的 RMS+门路径（loader DRIFT 已证）
         return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
                           use_fused=True, use_decay=True,
                           pre_norm=True, ffn_act='silu',
                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
                           kv_dim=48, kv_backend='delta_fla', kv_beta_init=4.0,
-                          short_conv=True, kv_beta_tok=True, kv_out_gdn=True, no_pos=True)
+                          short_conv=True, kv_beta_tok=True, no_pos=True)
     if arch == 'v42':
         return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
                           use_fused=True, use_decay=True,
@@ -77,34 +79,35 @@ def build(arch):
                           mem_force=True, ffn_hidden=2048)
     if arch == 'v52':
         # v5.2: 恒开门单变量——KV 输出 RMS+per-channel 门（去除 kv_gate=0 阻断）
-        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+        #       （v49 冠军基座 6L×FFN2048 + 唯一变量 kv_out_gdn）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
                           use_fused=True, use_decay=True,
                           pre_norm=True, ffn_act='silu',
                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
                           kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
-                          kv_out_gdn=True)
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True)
     if arch == 'v53':
         # v5.3: per-token β 直连单变量（sigmoid(w·k̂+b)，恒开下不被阻断）
-        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
                           use_fused=True, use_decay=True,
                           pre_norm=True, ffn_act='silu',
                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
                           kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
-                          kv_out_gdn=True, kv_beta_tok=True)
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True)
     if arch == 'v54':
         # v5.4: 非对称双组 kv192——MEM 3×96 永久组 + WRITE 5×128 学习键组（两调用）
-        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
                           use_fused=True, use_decay=True,
                           pre_norm=True, ffn_act='silu',
                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
                           kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
-                          kv_out_gdn=True, asym_delta=True)
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, asym_delta=True)
     if arch == 'v49':
         # v4.9: 肥层集中实验——6 层 × 专家 1024（总参数与 v44 持平），对标 GDN 5 层肥层集中
         return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
@@ -125,6 +128,17 @@ def build(arch):
                           kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
                           mem_force=True)
+    if arch == 'v48b':
+        # 归档复刻说明：scale_v53onv48_15k 的真实配置——v48 基座 + per-token β
+        # （原 v53 计划为 v49 基座+恒开门+β，但当时 kv_out_gdn 穿透缺失且基座为 12L，见 REPORT §14）
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, kv_beta_tok=True)
     if arch == 'v47':
         # v4.7: 键宽隔离实验——v44 冠军配方 + 128 维键（96 c 流 + 32 学习扩展）
         return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',

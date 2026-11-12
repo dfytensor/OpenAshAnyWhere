@@ -57,27 +57,8 @@ class MaxStateSuper(torch.nn.Module):
         self.mem_force = mem_force
         # v4.6: GDN 核心——键宽突破 c 流上限（96 c 流 + 32 学习扩展 = 128），MEM 头组永久化，
         #       per-token β，RMS 直连输出（无 kv_gate 阻断）
-        # v4.6: GDN 核心——键宽突破 c 流上限（96 c 流 + 32 学习扩展 = 128），MEM 头组永久化，
-        #       per-token β，RMS 直连输出（无 kv_gate 阻断）
         self.gdn_core = gdn_core
-        # v4.8: 非对称双组 delta——MEM 组（c 流键，零衰减，β=1）+ WRITE 组（学习键，宽维，per-token β）
-        self.asym_delta = asym_delta
-        if asym_delta:
-            self.mem_heads = 3
-            self.write_heads = heads - 3
-            self.mem_dim = kv_dim or (dim_size // heads)
-            self.write_dim = 128
-            theta0 = math.log(math.expm1(-math.log(kv_decay)))
-            self.q_mem = nn.Linear(dim_size, self.mem_heads * self.mem_dim, bias=False)
-            self.q_write = nn.Linear(dim_size, self.write_heads * self.write_dim, bias=False)
-            self.k_write = nn.Linear(dim_size, self.write_heads * self.write_dim, bias=False)
-            self.beta_write = nn.Linear(dim_size, self.write_heads, bias=False)
-            self.kv_loga_write = nn.Parameter(torch.full((self.write_heads,), theta0))
-            self.W_out_write = nn.Parameter(
-                torch.randn(self.write_heads, self.write_dim, self.mem_dim) * 0.02)
-            self.o_gate_mem = nn.Parameter(torch.ones(self.mem_heads, self.mem_dim))
-            self.o_gate_write = nn.Parameter(torch.ones(self.write_heads, self.mem_dim))
-        # v4.8: 非对称双组 delta——MEM 组（c 流键，零衰减，β=1）+ WRITE 组（学习键，宽维，per-token β）
+        # v5.4: 非对称双组 delta——MEM 组（c 流键，零衰减，β=1）+ WRITE 组（学习键，宽维，per-token β）
         self.asym_delta = asym_delta
         if asym_delta:
             self.mem_heads = 3
@@ -98,10 +79,10 @@ class MaxStateSuper(torch.nn.Module):
         if state_split:
             self.o_read = nn.Parameter(torch.randn(heads, self.kv_dh, self.kv_dh) * 0.02)
             self.o_mix = nn.Parameter(torch.full((heads,), 4.0))   # sigmoid≈0.98 主读出
-        # v4.3: GDN 式输出——RMS 归一化 + per-channel 门（通道恒开）
+        # v4.3: GDN 式输出——RMS 归一化 + per-channel 门（通道恒开；门作用于 KV 通道维 kv_dh）
         self.kv_out_gdn = kv_out_gdn
         if kv_out_gdn:
-            self.kv_out_gate = nn.Parameter(torch.ones(dim_size))
+            self.kv_out_gate = nn.Parameter(torch.ones(self.kv_dh))
         # v4.6: GDN 核心参数——键扩展投影 + 全宽输出投影（v47 隔离版：β/输出保持 v44 冠军配方）
         if gdn_core:
             kd_full = self.kv_dh + self.k_extra
@@ -191,7 +172,8 @@ class MaxStateSuper(torch.nn.Module):
         """KV 通道输出进入残差：默认 scalar kv_gate（零初始化渐进启用）；
         v4.3 GDN 式：RMS 归一化 + per-channel 门（通道恒开）。"""
         if self.kv_out_gdn:
-            rms = o_p.float().pow(2).mean(dim=(2, 3), keepdim=True).add_(1e-6).rsqrt().to(o_p.dtype)
+            # 逐 token RMS（仅 heads 维）：与解码侧 S=1 统计口径一致（解码精确性前提）
+            rms = o_p.float().pow(2).mean(dim=3, keepdim=True).add_(1e-6).rsqrt().to(o_p.dtype)
             return self.kv_out_gate.view(1, -1, 1, 1).to(o_p.dtype) * o_p * rms
         return self.kv_gate * o_p
 
@@ -257,46 +239,47 @@ class MaxStateSuper(torch.nn.Module):
                 out_l = self.gen_model(out, out1, c, out3, e)
         s_kv_new = None
         if self.asym_delta and FLA_GDN_OK and self.kv_channel:
-            # v4.8: 非对称双组 delta（分化后组合管理）
-            #   MEM 组（3 头 × 96，c 流键，g=0，β=1）——永久键值存储，永不遗忘
-            #   WRITE 组（4 头 × 128，学习键，学习衰减，per-token β）——精确写入
-            #   组合：per-group 门控 → 拼接 → (B,S,768) 加残差
+            # v5.4: 非对称双组 delta（分化后组合管理）
+            #   MEM 组（3 头 × 96，c 流键，g=0，β=1）——永久键值存储，永不衰减
+            #   WRITE 组（5 头 × 128，学习键，学习衰减，per-token β）——精确写入
+            #   布局与战斗验证通路一致：q/k/v (B,S,H,D)、g/beta (B,S,H)，fp32 进 FLA
             bx, sx = b, s
             c_perm = c.permute(0, 3, 2, 1).float()                 # (B,H,S,mem_dim)
             # ---- MEM 组：永久键值存储 ----
-            q_m = self.q_mem(x).view(b, sx, self.mem_heads, self.mem_dim)\
-                .permute(0, 2, 1, 3).float()
-            k_m = c_perm[:, :self.mem_heads]
+            q_m = self.q_mem(x).view(b, sx, self.mem_heads, self.mem_dim).float()
+            k_m = c_perm[:, :self.mem_heads].permute(0, 2, 1, 3)   # (B,S,H,mem_dim)
             k_m = k_m / (k_m.norm(dim=-1, keepdim=True) + 1e-6)
-            v_m = k_m * self.kv_beta.view(1, -1, 1, 1).to(k_m.dtype)[:, :self.mem_heads]
-            g_m = torch.zeros(b, sx, self.mem_heads, device=x.device)
-            b_m = torch.ones(b, sx, self.mem_heads, device=x.device)
+            v_m = k_m * self.kv_beta.to(k_m.dtype).view(1, 1, -1, 1)[:, :, :self.mem_heads]
+            g_m = x.new_zeros(b, sx, self.mem_heads, dtype=k_m.dtype)
+            b_m = torch.ones(b, sx, self.mem_heads, device=x.device, dtype=k_m.dtype)
             S_mem_prev = s_kv[0] if isinstance(s_kv, tuple) else None
             o_mem, S_mem_new = chunk_gated_delta_rule(
                 q=q_m, k=k_m, v=v_m, g=g_m, beta=b_m,
                 initial_state=S_mem_prev, output_final_state=True,
                 use_qk_l2norm_in_kernel=False)
             # ---- WRITE 组：精确写入 ----
-            q_w = self.q_write(x).view(b, sx, self.write_heads, self.write_dim)\
-                .permute(0, 2, 1, 3).float()
-            k_w = self.k_write(x).view(b, sx, self.write_heads, self.write_dim)\
-                .permute(0, 2, 1, 3).float()
+            q_w = self.q_write(x).view(b, sx, self.write_heads, self.write_dim).float()
+            k_w = self.k_write(x).view(b, sx, self.write_heads, self.write_dim).float()
             k_w = k_w / (k_w.norm(dim=-1, keepdim=True) + 1e-6)
-            g_w = (-torch.nn.functional.softplus(self.kv_loga_write)).view(1, -1, 1)\
-                .expand(b, self.write_heads, sx).permute(0, 2, 1).float()
-            b_w = torch.sigmoid(self.beta_write(x)).permute(0, 2, 1).float()
+            v_w = k_w                                              # delta 写入 v = k（同标准通路约定）
+            g_w = (-torch.nn.functional.softplus(self.kv_loga_write)).view(1, 1, -1)\
+                .expand(b, sx, self.write_heads).to(k_w.dtype)
+            b_w = torch.sigmoid(self.beta_write(x).float())        # (B,S,H) per-token β
             S_write_prev = s_kv[1] if isinstance(s_kv, tuple) else None
             o_w, S_write_new = chunk_gated_delta_rule(
-                q=q_w, k=k_w, v=v_w, g=g_w, beta=b_w,
+                q=q_w, k=k_w, v=v_w, g=g_w, beta=b_w.to(k_w.dtype),
                 initial_state=S_write_prev, output_final_state=True,
                 use_qk_l2norm_in_kernel=False)
             s_kv_new = (S_mem_new, S_write_new)
-            # ---- 组合管理：per-group 门控 → 拼接 → (B,S,768) ----
-            o_mem_g = self.o_gate_mem.view(1, 1, self.mem_heads, self.mem_dim) * o_mem
-            o_write_g = self.o_gate_write.view(1, 1, self.write_heads, self.mem_dim) \
+            # ---- 组合管理：per-group 门控 → 拼接 → (B,d_head,S,H) 加残差（同 v4.2 通路） ----
+            o_mem_g = self.o_gate_mem.to(o_mem.dtype).view(1, 1, self.mem_heads, self.mem_dim) * o_mem
+            o_write_g = self.o_gate_write.to(o_w.dtype).view(1, 1, self.write_heads, self.mem_dim) \
                 * torch.einsum('bshd,hde->bshe', o_w, self.W_out_write.to(o_w.dtype))
             o_all = torch.cat([o_mem_g, o_write_g], dim=2)          # (B,S,8,mem_dim)
-            out_l = out_l + o_all.permute(0, 2, 1, 3)               # (B,mem_dim,S,H) 加残差
+            o_p = o_all.permute(0, 3, 1, 2)                         # (B,mem_dim,S,H)
+            if self.mem_dim < self.d_head:
+                o_p = F.pad(o_p, (0, 0, 0, 0, 0, self.d_head - self.mem_dim))
+            out_l = out_l + o_p
             r = None
             out = out_l.transpose(1, 2).contiguous().view(b, s, d)
             if self.kv_channel:
@@ -717,7 +700,8 @@ class OpenASH_V3(torch.nn.Module):
                           short_conv, kv_beta_tok=kv_beta_tok,
                           em_ref=em_ref, ffn_hidden=ffn_hidden, wkey_em=self.wkey_em,
                           moe_ffn=moe_ffn, state_split=state_split, mem_heads=mem_heads,
-                          gdn_core=gdn_core, mem_force=mem_force)
+                          kv_out_gdn=kv_out_gdn,
+                          gdn_core=gdn_core, mem_force=mem_force, asym_delta=asym_delta)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights

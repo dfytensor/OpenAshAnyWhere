@@ -248,6 +248,40 @@ v3.7 的重复 span 绝对 CE 在全部 gap 档位为五模型最低（tf 的更
 
 **γ 终局对照**：v37 全层快 γ（3.6-3.8 tok）在 @2048 仍以 11.73 vs 12.32 胜 v35 的慢 γ 分层（162-170 tok）——delta KV 通道长程接管结论再次确认。
 
+## 12. v3.8/v3.9：β 门控与自研 delta-rule（2026-11-08）
+
+### v3.8：GDN 式 per-token β（归档，未采纳）
+
+β_t = sigmoid(w_h·k̂_t + b_h)，W 零初始化（起点等价常数 β=0.88）。**3000 步结果：23.46 vs v37 23.45——持平**。机制：kv_gate 零初始化把整个 KV 通道输出早期静音，β 梯度被 kv_gate 阻断——训练 40000 步后 per-head 常数 β 也几乎未移动（raw 3.4-4.2，即 init 4.0 原地）。结论：β 通道在当前架构中不是瓶颈，per-token β 与 β-init 扫描均无短期收益；若未来让 kv_gate 预热更快或 β 直接进主通路，可重测。
+
+### v3.9：自研分块 delta-rule（去 FLA 训练依赖 + 精确 O(1) 解码）
+
+**两次手工 Triton WY 失败的替代路径**：观察到本仓库 T=384/BT=64 → NT 仅 6 个 chunk——纯 torch 分块实现（autograd 免费反向）完全可行，无需手工 Triton 反向。`delta_chunk.py` 逐行锚定 FLA `chunk_delta_h/wy_fast/chunk_fwd/chunk_o` 四文件。
+
+**正确性**：`test_delta_chunk.py` 全 PASS——4 种形状前向（o/S 终态误差 ≤3e-4，fp32 求和序噪声级）+ 初态支持 + 反向五梯度（dq/dk/dv/dg/dβ vs FLA 手写 Triton 反向 ≤1e-3）。
+
+**三个关键约定修正**（对照 FLA 源码 + 2-token 手推双重确认）：
+1. **WY 逆 = (I + L)⁻¹（正号）**：chunk 内 delta 覆盖的修正是加法复合（k₂S₁ 含 write₁ 中的 −βkS 项二次翻号），非论文转置布局下的 (I−L)⁻¹
+2. **L 仅乘行 β**：`chunk_scaled_dot_kkt_fwd` 的 β_s 只乘行；列 β_t 在 w=A@(βe^g·k)、u=A@(βv) 构造时才进入
+3. **输出全局 scale = K^−0.5**：chunk_fwd_o 对 inter+intra 同乘（本仓库 v3.6+ 训练一直隐含此缩放）
+
+**速度**：与 FLA 同量级（fwd+bwd 计时在 GPU 共享时 50 vs 54 ms），训练路径 ~2-4× 慢于 FLA 融合 kernel（符合预估：NT=6 循环的 kernel-launch 开销）；FLA 保留为快速路径，`kv_backend='delta_chunk'` 为去依赖备选。
+
+### v3.9 附带修复：v3.7+ 增量解码三处 bug（全长度 fp32 验证）
+
+修复前 v37 逐 token vs 全序列 logp 差 2.96（v35 无卷积参照 4.29e-06 精确）：
+1. **短卷积解码缺状态**：conv 感受野需前 k−1=3 个 token 的 xn——状态元组扩展为 (e, S, conv_buf)（每层 +3×768 数值，仍严格 O(1)）
+2. **conv tap 对齐**：解码输出索引应为 len(cat)−1（最新 token 对应最后一个 kernel tap w₃），全缓冲时恰好等于 k−1 掩盖了早期短缓冲的错位
+3. **delta 单步语义**：旧版对 delta 模型误用 sum 写入；正确公式 **S ← a·S + k⊗(β·k − β·a·(kS))**（衰减在读出前应用，系数 β·a 非 β²），读出补 K^−0.5 缩放
+
+修复后：**vs 自研 fp32 参考精确到 2.1e-05**（vs FLA 全序列 7e-03 为 FLA kernel tf32 噪声上限）。
+
+### 下一步
+1. ~~v37@40000 步全 epoch~~ ✅ 12.10@384，全长度双杀
+2. ~~β 门控调优~~ ✅ v38 持平，机制已明（kv_gate 阻断）
+3. ~~自研 delta-rule~~ ✅ v3.9 delta_chunk 全 PASS
+4. GDN@40000 等 epoch（full_gdn_80k）：bs16×80000 步 = 488M tokens，训练中
+
 ## 13. 最终总结（2026-11-08）
 
 > **⚠️ 最终更正（2026-11-09）：** harness 双重位移 bug 修复后，正确训练的 GDN（`full_gdn_80k_fixed`，80000 步等 epoch）在**全部七个长度大幅领先**：@384 **8.42** vs v37 12.10（GDN −30%）、@64 12.06 vs 14.38、@2048 7.53 vs 11.73；复制召回也全面反超（rep 2.17@gap32、gain +1.63 均为全场第一）。此前"超越 GDN（5/7 长度）"完全是被削弱基线的产物，**已撤回**并公开更正（fla issue #1705 三条评论 + 横幅、PR #1706 同步）。修正后 GDN 甚至在 @64 就超过 tf（12.06 vs 17.63）——tf 的短上下文优势对正确的 GDN 不存在。
@@ -327,36 +361,58 @@ v3.7 的重复 span 绝对 CE 在全部 gap 档位为五模型最低（tf 的更
 
 kv_dh 48→96 + MEM 组 2→3 头（127M，+20% vs GDN 如实披露）：**全部七长度再下一城**（@384 14.57，vs v42 −1.7%、vs v37 累计 −3.5%）；复制召回 @32 gain +0.86 / rep 3.12 回到全场最优。此前 kv_dh 48 优于 96 的结论是 **sum 写入时代**的——delta 写入 + state 分化下容量重新成为正收益。scaling 未饱和，下一档（kv_dh 128 / MEM 4 头）值得继续。
 
-## 12. v3.8/v3.9：β 门控与自研 delta-rule（2026-11-08）
+## 15. v47–v54：宽键封锁、肥层重构与三消融链（2026-11-10 ~ 11-13）
 
-### v3.8：GDN 式 per-token β（归档，未采纳）
+### v47 宽键方向关闭（技术封锁）
 
-β_t = sigmoid(w_h·k̂_t + b_h)，W 零初始化（起点等价常数 β=0.88）。**3000 步结果：23.46 vs v37 23.45——持平**。机制：kv_gate 零初始化把整个 KV 通道输出早期静音，β 梯度被 kv_gate 阻断——训练 40000 步后 per-head 常数 β 也几乎未移动（raw 3.4-4.2，即 init 4.0 原地）。结论：β 通道在当前架构中不是瓶颈，per-token β 与 β-init 扫描均无短期收益；若未来让 kv_gate 预热更快或 β 直接进主通路，可重测。
+v44 配方 + 128 维键（96 c 流 + 32 学习扩展）：**双栈全线封锁**——K=128 fp32 触发 FLA kkt autotune IMA（fused chunk64 与 unfused chunk32 均如此）；K=128/112 bf16 触发 Windows triton 3.2 PassManager 编译崩溃；WSL triton 3.6 在训练形状（B32 T383）同样 IMA（(2,384) 冒烟可通过——训练形状特有）。自研 delta_chunk @kv128 可跑但显存抖动 30s/step（≈125h/run）不可行。**结论：c 流 96 维键帽在此技术栈上成立**，直至 FLA 上游修复或 d_head 重构（hidden 1024 = v50 的动机之一）。
 
-### v3.9：自研分块 delta-rule（去 FLA 训练依赖 + 精确 O(1) 解码）
+### v50 肥层重构：当前全家族最优（2026-11-10）
 
-**两次手工 Triton WY 失败的替代路径**：观察到本仓库 T=384/BT=64 → NT 仅 6 个 chunk——纯 torch 分块实现（autograd 免费反向）完全可行，无需手工 Triton 反向。`delta_chunk.py` 逐行锚定 FLA `chunk_delta_h/wy_fast/chunk_fwd/chunk_o` 四文件。
+hidden 768→1024、d_head 96→128（GDN 同构）、kv_dim 128（状态容量 +78% vs v44，无帽因 kv_dim ≤ d_head）、6 层肥 MoE(2048)、160.1M（+51% vs GDN 如实披露）：**train val @384 = 14.00（probe 13.87）**，全七长度胜 tf；WSL 栈训练稳定（383ms/step）。证明容量分配假说：肥层集中 + delta 容量占比提升是追 GDN 的有效路径。
 
-**正确性**：`test_delta_chunk.py` 全 PASS——4 种形状前向（o/S 终态误差 ≤3e-4，fp32 求和序噪声级）+ 初态支持 + 反向五梯度（dq/dk/dv/dg/dβ vs FLA 手写 Triton 反向 ≤1e-3）。
+### v51 tied-head 压缩失败（2026-11-11）
 
-**三个关键约定修正**（对照 FLA 源码 + 2-token 手推双重确认）：
-1. **WY 逆 = (I + L)⁻¹（正号）**：chunk 内 delta 覆盖的修正是加法复合（k₂S₁ 含 write₁ 中的 −βkS 项二次翻号），非论文转置布局下的 (I−L)⁻¹
-2. **L 仅乘行 β**：`chunk_scaled_dot_kkt_fwd` 的 β_s 只乘行；列 β_t 在 w=A@(βe^g·k)、u=A@(βv) 构造时才进入
-3. **输出全局 scale = K^−0.5**：chunk_fwd_o 对 inter+intra 同乘（本仓库 v3.6+ 训练一直隐含此缩放）
+v50 架构 via tied-head + 专家 512 压到 98.7M（严格低于 GDN 106M）：**15.92 @15k（vs v50 14.00，劣化 −13.7%）**。起步 loss ~32 系 logit_scale=1/32 可学习缩放（非发散）。**严格同规模同算力下 GDN 仍大幅领先——诚实归档，不强行宣布胜利。**
 
-**速度**：与 FLA 同量级（fwd+bwd 计时在 GPU 共享时 50 vs 54 ms），训练路径 ~2-4× 慢于 FLA 融合 kernel（符合预估：NT=6 循环的 kernel-launch 开销）；FLA 保留为快速路径，`kv_backend='delta_chunk'` 为去依赖备选。
+### 2026-11-12/13 三消融链事故与重建（重要工程复盘）
 
-### v3.9 附带修复：v3.7+ 增量解码三处 bug（全长度 fp32 验证）
+发射 v52/v53/v54 三消融（v49 冠军基座）后发现**三重静默 bug**，全部修复并诚实归档：
 
-修复前 v37 逐 token vs 全序列 logp 差 2.96（v35 无卷积参照 4.29e-06 精确）：
-1. **短卷积解码缺状态**：conv 感受野需前 k−1=3 个 token 的 xn——状态元组扩展为 (e, S, conv_buf)（每层 +3×768 数值，仍严格 O(1)）
-2. **conv tap 对齐**：解码输出索引应为 len(cat)−1（最新 token 对应最后一个 kernel tap w₃），全缓冲时恰好等于 k−1 掩盖了早期短缓冲的错位
-3. **delta 单步语义**：旧版对 delta 模型误用 sum 写入；正确公式 **S ← a·S + k⊗(β·k − β·a·(kS))**（衰减在读出前应用，系数 β·a 非 β²），读出补 K^−0.5 缩放
+1. **穿透缺失（最严重）**：`OpenASH_V3 → DecoderLayer` 调用点从未传递 `kv_out_gdn`/`asym_delta`（Default False）——**声明的 v52（恒开门）从未真正训练过**。修复穿透并端到端验证（`att.kv_out_gdn`/`write_heads` 属性检查 + 解码精确性）。
+2. **误跑复刻归档**：旧 scale_v52_15k 的实际配置 = 12 层 v48 配方（与 v48 run 逐字节相同：同 config+seed+data → 确定性 → 两者 val **同数 14.74** 互为铁证）。改名归档：`scale_v52lite_15k`（= v48 复刻）、`scale_v53onv48_15k`（= v48 基座 + per-token β，**14.64**——βtok 的有效单变量数据点，−0.10）。
+3. **v49 死参数确认**：scale_v49_15k checkpoint 含 6×`kv_out_gate`(768) **全为 init 值 1.0**——当年该参数被无条件创建但从未进前向/梯度路径（v49 行为上属 kv_gate 标量门家族）。探针加载 unexp=6 属良性（strict=False 丢弃死参数，行为精确等价）。v43 的 build 修订主义同期修正（kv_out_gdn=False 对齐训练真相）。
 
-修复后：**vs 自研 fp32 参考精确到 2.1e-05**（vs FLA 全序列 7e-03 为 FLA kernel tf32 噪声上限）。
+**附带修复**：`_kv_out` 门向量形状 768→kv_dh(96)（原版形状错但从未被训练触及）；RMS 统计口径改逐 token（heads 维）——训练/解码一致前提，修复后 v52 解码 fp32 精确 1.35e-04。
 
-### 下一步
-1. ~~v37@40000 步全 epoch~~ ✅ 12.10@384，全长度双杀
-2. ~~β 门控调优~~ ✅ v38 持平，机制已明（kv_gate 阻断）
-3. ~~自研 delta-rule~~ ✅ v3.9 delta_chunk 全 PASS
-4. GDN@40000 等 epoch（full_gdn_80k）：bs16×80000 步 = 488M tokens，训练中
+### v52/v53/v54 消融设计（重建后，WSL 串行链 ~9h）
+
+| 编号 | 唯一变量 | 参数 | 假说 |
+|---|---|---|---|
+| v52 | kv_out_gdn 恒开门（RMS+通道门，去 kv_gate=0 阻断） | 117.4M（=v49） | 门阻断拖慢 KV 通道学习 |
+| v53 | v52 + per-token β 直连 | 117.4M | 逐 token 写入强度可变 |
+| v54 | v52 + 非对称双组 kv192（MEM 3×96 c 流键 g=0/β=1 + WRITE 5×128 学习键 per-token β，双 FLA 调用） | 125.0M（+6.6% 如实披露；delta 容量 +21%） | 分化后扩容 |
+
+v54 实现要点：布局与战斗验证通路一致（q/k/v (B,S,H,D)、g/β (B,S,H)，fp32 进 FLA）；组状态对 (S_mem, S_write) 打包进 state 载体第二槽；WSL 训练形状（B32 T383）冒烟通过——**WRITE 5×128 在 H=5 下未触发 v47 式 IMA**。
+
+### 15000 步家族排名（公平口径，train val @384（probe））
+
+| 排名 | 模型 | val@384 | 参数 | 备注 |
+|---|---|---|---|---|
+| 1 | **v50** | **14.00（13.87）** | 160.1M | hidden 1024 重构，全七长度胜 tf |
+| 2 | v49 | 14.53（14.41） | 117.4M | 6 层肥层集中 |
+| 3 | v44 | 14.69（14.57） | 127.0M | kv96 + 3MEM |
+| 4 | v45 | 14.71（14.57） | 127.0M | MEM×4（饱和） |
+| 5 | v42 | 14.98 | 122.8M | state 分化 + MoE |
+| — | v51 | 15.92 | 98.7M | tied-head ❌ |
+| — | v46 | 15.13 | 104.9M | GDN-core 移植 ❌ |
+| — | GDN-fixed | ~10.3（15k 等效）/ **8.42（80k 终局）** | 106M | 目标线 |
+
+### 裁决表（三消融链跑完后填充）
+
+| 编号 | val @384 | vs v49 14.53 | 判定 |
+|---|---|---|---|
+| v52 恒开门 | 训练中 | | 门阻断假说 |
+| v53 +βtok | 排队 | | β 直连假说 |
+| v54 +asym kv192 | 排队 | | 分化扩容假说 |
+| 参照：βtok@v48 基座（v53onv48） | 14.64（−0.10 vs 14.74） | | β 弱正 |
