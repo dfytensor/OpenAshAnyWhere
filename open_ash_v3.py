@@ -41,7 +41,8 @@ class MaxStateSuper(torch.nn.Module):
                  kv_channel=False, kv_decay=0.98, kv_norm_keys=False, kv_beta=False,
                  kv_delta=False, kv_dim=None, kv_backend='sum', kv_beta_init=0.0, kv_beta_tok=False,
                  em_ref=None, wkey_em=None, state_split=False, kv_out_gdn=False, mem_heads=2,
-                 gdn_core=False, k_extra=32, mem_force=False, asym_delta=False, mem_extra=False):
+                 gdn_core=False, k_extra=32, mem_force=False, asym_delta=False, mem_extra=False,
+                 kv_value_proj=False):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -122,6 +123,11 @@ class MaxStateSuper(torch.nn.Module):
                 if kv_beta_tok:
                     self.kv_beta_w = nn.Parameter(torch.zeros(heads, self.kv_dh))
                     self.kv_beta_b = nn.Parameter(torch.full((heads,), 2.0))
+                # v5.3V: 独立 value 投影（非对称写入）——kv_delta 时代 v=k̂ 对称外积只能存
+                #        token 身份 payload；GDN/DeltaNet 的 v 为独立学习投影（内容 payload）。
+                #        该差异从未被隔离对照过，是配对召回差距的头号嫌疑。
+                self.kv_value_proj = nn.Linear(dim_size, self.heads * self.kv_dh, bias=False) \
+                    if kv_value_proj else None
 
         # v1/v2 为 4 路投影；v3 中 c 路改由 state_em 查表提供，故只需 3 路
         if em_ref is not None:
@@ -346,7 +352,10 @@ class MaxStateSuper(torch.nn.Module):
                 # 布局：q/k/v (B,S,H,D)、g (B,S,H) log 域、beta (B,S,H)
                 qq_f = qq.permute(0, 2, 1, 3).float()        # (B,S,H,kv_dh)
                 kk_f = kk.permute(0, 2, 1, 3).float()        # (B,S,H,kv_dh) 归一化键
-                vv_f = kk_f.float()                          # delta 写入 v = k
+                if self.kv_value_proj is not None:
+                    vv_f = self.kv_value_proj(x).view(bx, sx, self.heads, self.kv_dh).float()
+                else:
+                    vv_f = kk_f.float()                      # delta 写入 v = k（旧约定）
                 g_f = log_a.permute(0, 2, 1).float()         # (B,S,H) log 域衰减
                 if getattr(self, 'kv_beta_tok', False):
                     # v3.8: per-token β（fp32 einsum，kk_f 已归一化）
@@ -401,8 +410,14 @@ class MaxStateSuper(torch.nn.Module):
                     mh = self.mem_heads
                     a_step = torch.cat([torch.ones_like(a_step[..., :mh]), a_step[..., mh:]], dim=-1)
                     bd = torch.cat([torch.ones_like(bd[..., :mh]), bd[..., mh:]], dim=-1)
-                # 锚定 FLA 单 token 语义：S ← a·S + k⊗(β·k − β·a·(kS))（衰减在读出前应用）
-                corr = kd - a_step.unsqueeze(-1) * sv                  # (B,H,D)
+                # 锚定 FLA 单 token 语义：S ← a·S + k⊗(β·v − β·a·(kS))（衰减在读出前应用）
+                # v5.3V: v≠k 时 corr 用独立 value（v=k 退化为原对称写入）
+                if self.kv_value_proj is not None:
+                    vd = self.kv_value_proj(x).view(b, sx, self.heads, self.kv_dh) \
+                        .float().squeeze(1)                            # (B,H,D)
+                else:
+                    vd = kd
+                corr = vd - a_step.unsqueeze(-1) * sv                  # (B,H,D)
                 s_new = a_step[..., None, None] * s_kv.to(qq.dtype) \
                     + (kd * bd.unsqueeze(-1)).unsqueeze(-1) * corr.unsqueeze(-2)  # (B,H,D,V)
                 r = torch.einsum('bhd,bhdv->bhv', qq.to(qq.dtype).squeeze(2), s_new) \
@@ -588,7 +603,7 @@ class DecoderLayer(torch.nn.Module):
                  kv_backend='sum', kv_beta_init=0.0, short_conv=False, conv_kernel=4, kv_beta_tok=False,
                  em_ref=None, ffn_hidden=None, wkey_em=None, moe_ffn=False,
                  state_split=False, kv_out_gdn=False, mem_heads=2, gdn_core=False,
-                 mem_force=False, asym_delta=False, mem_extra=False):
+                 mem_force=False, asym_delta=False, mem_extra=False, kv_value_proj=False):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
@@ -600,7 +615,8 @@ class DecoderLayer(torch.nn.Module):
                                                    state_split=state_split, kv_out_gdn=kv_out_gdn,
                                                    mem_heads=mem_heads, gdn_core=gdn_core,
                                                    mem_force=mem_force, asym_delta=asym_delta,
-                                                   mem_extra=mem_extra)
+                                                   mem_extra=mem_extra,
+                                                   kv_value_proj=kv_value_proj)
         if em_ref is not None:
             # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
             fh = ffn_hidden or hidden_size
@@ -721,7 +737,8 @@ class OpenASH_V3(torch.nn.Module):
                  kv_dim=None, kv_backend='sum', kv_beta_init=0.0, short_conv=False, kv_beta_tok=False,
                  em_weights=False, ffn_hidden=None, id_weight=False, wkey_rank=64, tied_head=False,
                  moe_ffn=False, state_split=False, kv_out_gdn=False, no_pos=False, mem_heads=2,
-                 gdn_core=False, mem_force=False, asym_delta=False, mem_extra=False):
+                 gdn_core=False, mem_force=False, asym_delta=False, mem_extra=False,
+                 kv_value_proj=False):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -747,7 +764,7 @@ class OpenASH_V3(torch.nn.Module):
                           moe_ffn=moe_ffn, state_split=state_split, mem_heads=mem_heads,
                           kv_out_gdn=kv_out_gdn,
                           gdn_core=gdn_core, mem_force=mem_force, asym_delta=asym_delta,
-                          mem_extra=mem_extra)
+                          mem_extra=mem_extra, kv_value_proj=kv_value_proj)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights
