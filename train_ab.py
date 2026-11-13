@@ -122,6 +122,19 @@ def build(arch):
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
                           mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
                           mem_extra=True)
+    if arch == 'v53q':
+        # v5.3Q: 检索 query L2 归一化（GDN 的 use_qk_l2norm_in_kernel=True 语义隔离）——
+        #        我们归一化 k 但从不归一化 q；|q|=1 钉死检索锐度（配对召回差距嫌疑之二）。
+        #        其余 = v53 冠军配方逐位不动（参数同 v53 117.4M，零新增）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
+                          kv_q_l2norm=True)
     if arch == 'v53v':
         # v5.3V: 独立 value 投影（非对称写入）隔离实验——kv_delta 时代 v=k̂ 对称外积只能存
         #        token 身份 payload；GDN/DeltaNet 的 v 为独立学习投影。配对召回差距（rep 2.84
