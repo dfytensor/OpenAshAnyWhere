@@ -57,8 +57,8 @@ def load_model(key):
                     ('scale_v53_15k', 'v53'), ('scale_v54_15k', 'v54'),
                     # 归档的误跑目录（见 REPORT §14 复盘）
                     ('scale_v52lite_15k', 'v48'), ('scale_v53onv48_15k', 'v48b'),
-                    # full epoch 终局（v53r = 召回锚定版，前缀须在 v53_ 之前匹配）
-                    ('full_v53r_40k', 'v53'), ('full_v53_40k', 'v53'),
+                    # full epoch 终局（v53r 前缀覆盖 r/r2 两代召回锚定版）
+                    ('full_v53r', 'v53'), ('full_v53_40k', 'v53'),
                     # MEM 永久组增量隔离
                     ('scale_v53m_15k', 'v53m')]
         arch = None
@@ -161,7 +161,7 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['full_v53_40k', 'full_v53r_40k', 'full_gdn_80k_fixed']
+MODEL_KEYS = ['full_v53_40k', 'full_v53r_40k', 'full_v53r2_40k', 'full_gdn_80k_fixed']
 models = {k: load_model(k) for k in MODEL_KEYS}
 wrapper_keys = {k for k in MODEL_KEYS if not hasattr(models[k], 'decoder_layers')}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]
@@ -188,7 +188,9 @@ gen = torch.Generator(device='cpu').manual_seed(99)
 
 @torch.no_grad()
 def recall_ce(m, gap):
-    """返回 (重复段 CE, 新片段 CE)：同批位置，tail 为重复 span vs 语料新片段。"""
+    """返回 (重复段 CE, 新片段 CE)：同批位置，tail 为重复 span vs 语料新片段。
+    协议：生成器在函数内重置——每个模型测完全相同的 span 序列（严格配对，可跨模型比较）。"""
+    gen = torch.Generator(device='cpu').manual_seed(99)
     seq_len = PREFIX + A_SPAN + gap + A_SPAN
     ce_r_sum, ce_f_sum, n = 0.0, 0.0, 0
     lo = PREFIX + A_SPAN + gap - 1          # A2 段在 targets 坐标的起点
