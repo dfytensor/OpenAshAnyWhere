@@ -57,8 +57,8 @@ def load_model(key):
                     ('scale_v53_15k', 'v53'), ('scale_v54_15k', 'v54'),
                     # 归档的误跑目录（见 REPORT §14 复盘）
                     ('scale_v52lite_15k', 'v48'), ('scale_v53onv48_15k', 'v48b'),
-                    # full epoch 终局
-                    ('full_v53_40k', 'v53'),
+                    # full epoch 终局（v53r = 召回锚定版，前缀须在 v53_ 之前匹配）
+                    ('full_v53r_40k', 'v53'), ('full_v53_40k', 'v53'),
                     # MEM 永久组增量隔离
                     ('scale_v53m_15k', 'v53m')]
         arch = None
@@ -161,7 +161,7 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['scale_v49_15k', 'scale_v53_15k', 'scale_v53m_15k', 'scale_v54_15k']
+MODEL_KEYS = ['full_v53_40k', 'full_v53r_40k', 'full_gdn_80k_fixed']
 models = {k: load_model(k) for k in MODEL_KEYS}
 wrapper_keys = {k for k in MODEL_KEYS if not hasattr(models[k], 'decoder_layers')}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]
