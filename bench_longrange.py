@@ -56,7 +56,9 @@ def load_model(key):
                     ('scale_v50_15k', 'v50'), ('scale_v52_15k', 'v52'),
                     ('scale_v53_15k', 'v53'), ('scale_v54_15k', 'v54'),
                     # 归档的误跑目录（见 REPORT §14 复盘）
-                    ('scale_v52lite_15k', 'v48'), ('scale_v53onv48_15k', 'v48b')]
+                    ('scale_v52lite_15k', 'v48'), ('scale_v53onv48_15k', 'v48b'),
+                    # full epoch 终局
+                    ('full_v53_40k', 'v53')]
         arch = None
         for pre, a in ARCH_MAP:
             if key.startswith(pre):
@@ -157,8 +159,7 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['scale_v49_15k', 'scale_v50_15k', 'scale_v52_15k', 'scale_v53_15k',
-              'scale_v54_15k', 'big_tf']
+MODEL_KEYS = ['full_v53_40k', 'full_v37', 'full_tf', 'full_gdn_80k_fixed']
 models = {k: load_model(k) for k in MODEL_KEYS}
 wrapper_keys = {k for k in MODEL_KEYS if not hasattr(models[k], 'decoder_layers')}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]
