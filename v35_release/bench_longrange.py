@@ -46,58 +46,39 @@ def load_model(key):
                        use_fused=True, use_decay=ud)
     else:
         path = os.path.join(key, 'model.pt')
-        # v4.2/v4.3 分支（独立构建）
-        if key.startswith('scale_v42_15k') or key.startswith('scale_v43_15k') \
-                or key.startswith('scale_v44_15k') or key.startswith('scale_v45_15k') \
-                or key.startswith('scale_v49_15k') or key.startswith('scale_v50_15k'):
+        # v4.2+ 全部 scale_* 变体：直接走 train_ab.build（训练配置的唯一真相源）。
+        # 加载诊断：strict=False 但打印 missing/unexpected——配置漂移必须可见，不允许静默错探。
+        from train_ab import build as tab_build
+        ARCH_MAP = [('scale_v37_15k', 'v37'), ('scale_v42_15k', 'v42'),
+                    ('scale_v43_15k', 'v43'), ('scale_v44_15k', 'v44'),
+                    ('scale_v45_15k', 'v45'), ('scale_v47_15k', 'v47'),
+                    ('scale_v48_15k', 'v48'), ('scale_v49_15k', 'v49'),
+                    ('scale_v50_15k', 'v50'), ('scale_v52_15k', 'v52'),
+                    ('scale_v53_15k', 'v53'), ('scale_v54_15k', 'v54'),
+                    # 归档的误跑目录（见 REPORT §14 复盘）
+                    ('scale_v52lite_15k', 'v48'), ('scale_v53onv48_15k', 'v48b'),
+                    # full epoch 终局（v53r 前缀覆盖 r/r2 两代召回锚定版）
+                    ('full_v53w', 'v53w'), ('full_v53r', 'v53'), ('full_v53_40k', 'v53'),
+                    # MEM 永久组增量隔离
+                    ('scale_v53m_15k', 'v53m')]
+        arch = None
+        for pre, a in ARCH_MAP:
+            if key.startswith(pre):
+                arch = a
+                break
+        if arch is not None:
             torch.manual_seed(2024)
-            base = dict(voc_size=VOC, hidden_size=HID, num_heads=HEADS, num_layers=LAYERS,
-                        max_seq_len=2048, model_flag='train', use_fused=True, use_decay=True,
-                        pre_norm=True, ffn_act='silu', decay_init=(0.0001, 0.35), decay_v_std=0.04,
-                        kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
-                        kv_dim=48, kv_backend='delta_fla', kv_beta_init=4.0, short_conv=True)
-            if key.startswith('scale_v42_15k'):
-                m = OpenASH_V3(**base, moe_ffn=True, state_split=True)
-            elif key.startswith('scale_v44_15k'):
-                base['kv_dim'] = 96
-                m = OpenASH_V3(**base, moe_ffn=True, state_split=True, mem_heads=3)
-            elif key.startswith('scale_v45_15k'):
-                base['kv_dim'] = 96
-                m = OpenASH_V3(**base, moe_ffn=True, state_split=True, mem_heads=4)
-            elif key.startswith('scale_v49_15k'):
-                base['kv_dim'] = 96
-                mm = OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
-                                use_fused=True, use_decay=True,
-                                pre_norm=True, ffn_act='silu',
-                                decay_init=(0.0001, 0.35), decay_v_std=0.04,
-                                kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
-                                kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
-                                short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
-                                mem_force=True, ffn_hidden=2048)
-                mm.load_state_dict(
-                    torch.load(os.path.join(key, 'model.pt'), weights_only=True),
-                    strict=False)
-                m = mm
-                return m.cuda()
-            elif key.startswith('scale_v50_15k'):
-                m = OpenASH_V3(23004, 1024, 8, 6, max_seq_len=2048, model_flag='train',
-                               use_fused=True, use_decay=True,
-                               pre_norm=True, ffn_act='silu',
-                               decay_init=(0.0001, 0.35), decay_v_std=0.04,
-                               kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
-                               kv_dim=128, kv_backend='delta_fla', kv_beta_init=4.0,
-                               short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
-                               mem_force=True, ffn_hidden=2048)
-                m.load_state_dict(torch.load(path, weights_only=True), strict=False)
-                m.eval()
-                return m.cuda()
-                return m.cuda()
-            elif key.startswith('scale_v47_15k'):
-                base['kv_dim'] = 96
-                m = OpenASH_V3(**base, moe_ffn=True, state_split=True, mem_heads=3, gdn_core=True)
-            else:
-                m = OpenASH_V3(**base, kv_beta_tok=True, kv_out_gdn=True, no_pos=True)
-            m.load_state_dict(torch.load(path, weights_only=True))
+            m = tab_build(arch)
+            sd = torch.load(path, map_location='cpu', weights_only=True)
+            ret = m.load_state_dict(sd, strict=False)
+            n_miss = len(ret.missing_keys)
+            n_unexp = len(ret.unexpected_keys)
+            n_par = sum(p.numel() for p in m.parameters())
+            print(f'[load {key}] arch={arch} params={n_par:,} '
+                  f'missing={n_miss} unexpected={n_unexp}')
+            if n_miss or n_unexp:
+                print(f'  !! CONFIG DRIFT: missing[:3]={ret.missing_keys[:3]} '
+                      f'unexpected[:3]={ret.unexpected_keys[:3]}')
             m.eval()
             return m.cuda()
         # FLA 官方基线（wrapper 保存，键带 model. 前缀）
@@ -180,7 +161,7 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['scale_v37_15k', 'scale_v42_15k', 'scale_v44_15k', 'scale_v49_15k', 'scale_v50_15k', 'big_tf']
+MODEL_KEYS = ['full_v53wr_40k', 'full_v53r2_40k', 'full_v53_40k', 'full_gdn_80k_fixed']
 models = {k: load_model(k) for k in MODEL_KEYS}
 wrapper_keys = {k for k in MODEL_KEYS if not hasattr(models[k], 'decoder_layers')}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]
@@ -207,7 +188,9 @@ gen = torch.Generator(device='cpu').manual_seed(99)
 
 @torch.no_grad()
 def recall_ce(m, gap):
-    """返回 (重复段 CE, 新片段 CE)：同批位置，tail 为重复 span vs 语料新片段。"""
+    """返回 (重复段 CE, 新片段 CE)：同批位置，tail 为重复 span vs 语料新片段。
+    协议：生成器在函数内重置——每个模型测完全相同的 span 序列（严格配对，可跨模型比较）。"""
+    gen = torch.Generator(device='cpu').manual_seed(99)
     seq_len = PREFIX + A_SPAN + gap + A_SPAN
     ce_r_sum, ce_f_sum, n = 0.0, 0.0, 0
     lo = PREFIX + A_SPAN + gap - 1          # A2 段在 targets 坐标的起点

@@ -31,13 +31,15 @@ def build(arch):
                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
                           kv_dim=48, kv_backend='delta_fla', kv_beta_init=4.0)
     if arch == 'v43':
+        # 历史对齐注：scale_v43_15k checkpoint 无 kv_out_gate（训练时该机制未生效/未创建），
+        # kv_out_gdn 必须为 False——否则探针会走上训练从未见过的 RMS+门路径（loader DRIFT 已证）
         return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
                           use_fused=True, use_decay=True,
                           pre_norm=True, ffn_act='silu',
                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
                           kv_dim=48, kv_backend='delta_fla', kv_beta_init=4.0,
-                          short_conv=True, kv_beta_tok=True, kv_out_gdn=True, no_pos=True)
+                          short_conv=True, kv_beta_tok=True, no_pos=True)
     if arch == 'v42':
         return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
                           use_fused=True, use_decay=True,
@@ -46,6 +48,212 @@ def build(arch):
                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
                           kv_dim=48, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, moe_ffn=True, state_split=True)
+    if arch == 'v46':
+        # v4.6: GDN 核心——键宽突破 c 流上限（96+32=128）、MEM 组永久化、per-token β、RMS 直连
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, gdn_core=True, k_extra=16)
+    if arch == 'v51':
+        # v5.1: 公平规模裁决版——v50 架构 + tied head + 专家减半（98.7M ≤ GDN 106M）
+        return OpenASH_V3(23004, 1024, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=128, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=1024, tied_head=True)
+    if arch == 'v50':
+        # v5.0: 架构重构追 GDN——hidden 1024 / d_head 128（GDN 同构）/ kv128 / MEM 3/8 / 6 层肥层
+        return OpenASH_V3(23004, 1024, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=128, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048)
+    if arch == 'v53l':
+        # v5.3L: v53 冠军通路（恒开门 kv_out_gdn + per-token β）回灌 v50 容量骨架
+        #       （hidden 1024 / d_head 128 / kv128 / 6 层肥层 FFN2048 / MEM 3/8）——容量与通路合体验证
+        return OpenASH_V3(23004, 1024, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=128, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True)
+    if arch == 'v52':
+        # v5.2: 恒开门单变量——KV 输出 RMS+per-channel 门（去除 kv_gate=0 阻断）
+        #       （v49 冠军基座 6L×FFN2048 + 唯一变量 kv_out_gdn）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True)
+    if arch == 'v53':
+        # v5.3: per-token β 直连单变量（sigmoid(w·k̂+b)，恒开下不被阻断）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True)
+    if arch == 'v53m':
+        # v5.3M: v53 冠军配方 + 专用 MEM 永久组增量隔离——c 流键 g=0/β=1、专用 q_mem、
+        #        ones-init 门进 MEM 头槽位；标准通路不动（参数 ~118.7M，+1.3M 如实披露）。
+        #        动机：v54 在 gap=128 召回 +0.93（家族最佳）但整体负——隔离长距收益不带 WRITE 宽键
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
+                          mem_extra=True)
+    if arch == 'v53q':
+        # v5.3Q: 检索 query L2 归一化（GDN 的 use_qk_l2norm_in_kernel=True 语义隔离）——
+        #        我们归一化 k 但从不归一化 q；|q|=1 钉死检索锐度（配对召回差距嫌疑之二）。
+        #        其余 = v53 冠军配方逐位不动（参数同 v53 117.4M，零新增）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
+                          kv_q_l2norm=True)
+    if arch == 'v53w':
+        # v5.3W: 状态容量解封——kv_dim 96→192（每层 delta 状态 74K→295K，4×；GDN 内窥
+        #        实测其状态 786K/层 = 10.7× 我们——配对召回/利用差距的头号嫌疑是容量而非校准）。
+        #        o 经逐头 W_out_state 压回 d_head；~123M（+5.7M 如实披露）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=192, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True)
+    if arch == 'v53k':
+        # v5.3K: kv_dim 256（每层状态 8×256×256 = 524K = GDN 786K 的 67%）——容量阶梯第三级
+        #        （96→192 已证 LM −2.7%；256 为 kernel 极限探测位）；~131M 如实披露
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True)
+    if arch == 'v53g':
+        # v5.3G: 输入调制衰减（GDN 三件套最后一件的语义隔离）——g_t = -exp(A_log)·
+        #        softplus(a_proj(x_t)+dt_bias)，静态逐头衰减 → 逐 token 调制；起点等价静态。
+        #        叠加在 v53w 状态解封之上（累积配方）；~124M（+3.1K/层 如实披露）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=192, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
+                          kv_decay_mod=True)
+    if arch == 'v53v':
+        # v5.3V: 独立 value 投影（非对称写入）隔离实验——kv_delta 时代 v=k̂ 对称外积只能存
+        #        token 身份 payload；GDN/DeltaNet 的 v 为独立学习投影。配对召回差距（rep 2.84
+        #        vs 2.27 @gap=32）的头号嫌疑。其余 = v53 冠军配方逐位不动（~120.9M，+3.5M 如实披露）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
+                          kv_value_proj=True)
+    if arch == 'v54':
+        # v5.4: 非对称双组 kv192——MEM 3×96 永久组 + WRITE 5×128 学习键组（两调用）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, asym_delta=True)
+    if arch == 'v49':
+        # v4.9: 肥层集中实验——6 层 × 专家 1024（总参数与 v44 持平），对标 GDN 5 层肥层集中
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048)
+    if arch == 'v48':
+        # v4.8: MEM 头组（0:3）永久存储强制——g=0 + β=1 零衰减全覆盖（头组分化核心验证）
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True)
+    if arch == 'v48b':
+        # 归档复刻说明：scale_v53onv48_15k 的真实配置——v48 基座 + per-token β
+        # （原 v53 计划为 v49 基座+恒开门+β，但当时 kv_out_gdn 穿透缺失且基座为 12L，见 REPORT §14）
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, kv_beta_tok=True)
+    if arch == 'v47':
+        # v4.7: 键宽隔离实验——v44 冠军配方 + 128 维键（96 c 流 + 32 学习扩展）
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          gdn_core=True)
+    if arch == 'v45':
+        # v4.5: 容量档第二级（MEM 4 头 = 半数头永久记忆；kv_dh 受 c 流宽度约束 ≤96）
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=4)
+    if arch == 'v44':
+        # v4.4: delta 容量扩充（kv_dh 48→96）+ MEM 组扩容（2→3 头），对标 GDN 纯 delta 容量
+        return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=96, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True)
     if arch == 'v41':
         return OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
                           use_fused=True, use_decay=True,
@@ -178,6 +386,8 @@ def main():
     ap.add_argument('--out', required=True)
     ap.add_argument('--data', default=r'F:\OpenASH2605\minimind_data\pretrain_cached_30000_384.pt')
     ap.add_argument('--eval_every', type=int, default=2000)
+    ap.add_argument('--anchor_lambda', type=float, default=0.0,
+                    help='召回锚定：kv_beta_w/o_mix 向初值的相对 L2 惩罚系数（0=关闭）')
     args = ap.parse_args()
     arch = args.arch
     os.makedirs(args.out, exist_ok=True)
@@ -225,6 +435,27 @@ def main():
 
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.01)
 
+    # v5.3R: 召回锚定——向初始值锚定的绝对 L2 惩罚（仅 kv_beta_w + o_mix）。
+    #   依据：移植实验证明 15k→40k 的召回侵蚀由 β 锐化（kv_beta_w 范数翻倍，LM 代价仅 +0.03）
+    #   与 o_mix 漂移（MEM 头读出下降，单因子恢复 +0.39）因果驱动；全局 WD 方向对 o_mix 错误
+    #   （拉向 0 而非 init 4.0），故用 toward-init 锚定。注意：kv_beta_w 为零初始化，
+    #   禁用相对 L2（分母→0 会硬锁死 β），必须用绝对 L2；λ=4e-4 对应无约束漂移总量
+    #   （β_w ~6 + o_mix ~120 的 ‖Δ‖² 合计）时惩罚 ≈ 0.05 loss。λ=0 关闭（默认）。
+    anchored = []
+    if args.anchor_lambda > 0:
+        for n_, p_ in model.named_parameters():
+            if n_.endswith('kv_beta_w') or n_.endswith('o_mix'):
+                anchored.append((n_, p_, p_.detach().clone()))
+        print(f'[anchor] recall anchor on {len(anchored)} tensors, lambda={args.anchor_lambda}')
+
+    def anchor_loss():
+        if not anchored:
+            return torch.zeros((), device=DEV)
+        s = torch.zeros((), device=DEV)
+        for _, p_, p0 in anchored:
+            s = s + (p_.float() - p0.float()).pow(2).sum()
+        return args.anchor_lambda * s
+
     def lr_at(step):
         if step < args.warmup:
             return args.lr * step / args.warmup
@@ -241,12 +472,15 @@ def main():
         batch = next(it)
         with torch.autocast('cuda', dtype=torch.bfloat16):
             loss, _ = model.forward_loss(batch[:, :-1], batch[:, 1:], fused_ce=True)
+        if anchored:
+            loss = loss + anchor_loss()
         opt.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
         if step % 100 == 0 or step == 1:
             log.append({'step': step, 'loss': loss.item(), 'lr': lr,
+                        'anchor': float(anchor_loss()),
                         'ms_per_step': (time.time() - t0) / step * 1000})
             print(f'[{args.arch}] step {step:5d} | loss {loss.item():.3f} | lr {lr:.2e} | '
                   f'{(time.time() - t0) / step * 1000:.0f} ms/step')
