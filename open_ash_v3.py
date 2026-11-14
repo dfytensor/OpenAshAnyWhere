@@ -86,10 +86,11 @@ class MaxStateSuper(torch.nn.Module):
         if state_split:
             self.o_read = nn.Parameter(torch.randn(heads, self.kv_dh, self.kv_dh) * 0.02)
             self.o_mix = nn.Parameter(torch.full((heads,), 4.0))   # sigmoid≈0.98 主读出
-        # v4.3: GDN 式输出——RMS 归一化 + per-channel 门（通道恒开；门作用于 KV 通道维 kv_dh）
+        # v4.3: GDN 式输出——RMS 归一化 + per-channel 门（通道恒开；门作用于残差通道维 d_head，
+        #       kv_dh>d_head 时 o 已先经 W_out_state 压回 d_head）
         self.kv_out_gdn = kv_out_gdn
         if kv_out_gdn:
-            self.kv_out_gate = nn.Parameter(torch.ones(self.kv_dh))
+            self.kv_out_gate = nn.Parameter(torch.ones(self.d_head))
         # v4.6: GDN 核心参数——键扩展投影 + 全宽输出投影（v47 隔离版：β/输出保持 v44 冠军配方）
         if gdn_core:
             kd_full = self.kv_dh + self.k_extra
@@ -108,6 +109,14 @@ class MaxStateSuper(torch.nn.Module):
         if kv_channel:
             if not gdn_core:
                 self.q_proj = nn.Linear(dim_size, self.heads * self.kv_dh, bias=False)
+            # v5.3W: kv_dh > d_head 时，o (…,kv_dh) 经逐头 W_out_state 压回 d_head 进残差
+            #        （解封状态容量——GDN 内窥：其 delta 状态 786K/层 vs 我们 74K/层，10.7×）
+            if self.kv_dh > self.d_head:
+                self.W_out_state = nn.Parameter(
+                    torch.randn(heads, self.kv_dh, self.d_head) * 0.02)
+                # v5.3W: 宽键的学习扩展段（c 流身份 96 + 学习内容 96 = 192）
+                self.k_extra_proj = nn.Linear(
+                    dim_size, self.heads * (self.kv_dh - self.d_head), bias=False)
             theta0 = math.log(math.expm1(-math.log(kv_decay)))
             self.kv_loga = nn.Parameter(torch.full((heads,), theta0))
             self.kv_gate = nn.Parameter(torch.tensor(0.0))
@@ -340,8 +349,15 @@ class MaxStateSuper(torch.nn.Module):
                 return out, (e[:, :, -1:], s_kv_new)
             return out, e[:, :, -1:]
         if qq is not None:
-            cc_perm = c.permute(0, 3, 2, 1)
-            if self.kv_dh < self.d_head:
+            cc_perm = c.permute(0, 3, 2, 1).float()
+            if self.kv_dh > self.d_head:
+                # v5.3W: 宽键 = c 流身份(96) + 学习扩展(96)——标准分支 fp32 实现
+                #        （v47 的 concat 在独立 bf16 分支且 IMA；v50 已证标准分支宽键可训）。
+                #        身份半区保留精确自命中（承重墙），学习半区扩内容容量
+                k_x = self.k_extra_proj(x).view(bx, sx, self.heads, self.kv_dh - self.d_head) \
+                    .permute(0, 2, 1, 3).float()                     # (B,H,S,extra)
+                cc_perm = torch.cat([cc_perm[..., :self.d_head], k_x], dim=-1)
+            elif self.kv_dh < self.d_head:
                 cc_perm = cc_perm[..., :self.kv_dh]     # 瘦身：KV 通道用 c 流前 kv_dh 个 lane
             kk = cc_perm
             if self.kv_norm_keys:
@@ -392,9 +408,14 @@ class MaxStateSuper(torch.nn.Module):
                     o_aux = torch.einsum('bshd,hde->bshe', o, self.o_read.to(o.dtype))
                     mix = torch.sigmoid(self.o_mix).view(1, 1, -1, 1).to(o.dtype)
                     o = mix * o + (1 - mix) * o_aux
-                o_p = o.permute(0, 3, 1, 2)                     # (B,kv_dh,S,H)
-                if self.kv_dh < self.d_head:
-                    o_p = F.pad(o_p, (0, 0, 0, 0, 0, self.d_head - self.kv_dh))
+                if self.kv_dh > self.d_head:
+                    # v5.3W: 状态宽度突破 d_head——逐头 W_out_state 压回 d_head
+                    o_out = torch.einsum('bshd,hde->bshe', o, self.W_out_state.to(o.dtype))
+                    o_p = o_out.permute(0, 3, 1, 2)               # (B,d_head,S,H)
+                else:
+                    o_p = o.permute(0, 3, 1, 2)                   # (B,kv_dh,S,H)
+                    if self.kv_dh < self.d_head:
+                        o_p = F.pad(o_p, (0, 0, 0, 0, 0, self.d_head - self.kv_dh))
                 out_l = out_l + self._kv_out(o_p)
             elif s_kv is not None and sx == 1 and self.kv_backend in ('delta_fla', 'delta_chunk'):
                 # 增量单步（O(1) 解码，delta 写入，纯 torch fp32 精确）：
@@ -431,9 +452,12 @@ class MaxStateSuper(torch.nn.Module):
                 r = torch.einsum('bhd,bhdv->bhv', qq_r, s_new) \
                     * float(self.kv_dh) ** -0.5                         # 锚定 chunk_fwd_o scale
                 if self.state_split:
+                    # v4.2: aux 读出在 kv_dh 空间先做（W_out_state 压缩之前）
                     r_aux = torch.einsum('bhd,hde->bhe', r, self.o_read.to(r.dtype))
                     mix = torch.sigmoid(self.o_mix).view(1, -1, 1).to(r.dtype)
                     r = mix * r + (1 - mix) * r_aux
+                if self.kv_dh > self.d_head:
+                    r = torch.einsum('bhd,hde->bhe', r, self.W_out_state.to(r.dtype))
                 s_kv_new = s_new
             elif s_kv is not None and sx == 1:
                 # 增量单步（O(1) 解码，sum 写入）：S ← a·S + k̂⊗k̂；r = q·S

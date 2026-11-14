@@ -135,6 +135,18 @@ def build(arch):
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
                           mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
                           kv_q_l2norm=True)
+    if arch == 'v53w':
+        # v5.3W: 状态容量解封——kv_dim 96→192（每层 delta 状态 74K→295K，4×；GDN 内窥
+        #        实测其状态 786K/层 = 10.7× 我们——配对召回/利用差距的头号嫌疑是容量而非校准）。
+        #        o 经逐头 W_out_state 压回 d_head；~123M（+5.7M 如实披露）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=192, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True)
     if arch == 'v53v':
         # v5.3V: 独立 value 投影（非对称写入）隔离实验——kv_delta 时代 v=k̂ 对称外积只能存
         #        token 身份 payload；GDN/DeltaNet 的 v 为独立学习投影。配对召回差距（rep 2.84
