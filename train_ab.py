@@ -147,6 +147,19 @@ def build(arch):
                           kv_dim=192, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
                           mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True)
+    if arch == 'v53g':
+        # v5.3G: 输入调制衰减（GDN 三件套最后一件的语义隔离）——g_t = -exp(A_log)·
+        #        softplus(a_proj(x_t)+dt_bias)，静态逐头衰减 → 逐 token 调制；起点等价静态。
+        #        叠加在 v53w 状态解封之上（累积配方）；~124M（+3.1K/层 如实披露）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=192, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
+                          kv_decay_mod=True)
     if arch == 'v53v':
         # v5.3V: 独立 value 投影（非对称写入）隔离实验——kv_delta 时代 v=k̂ 对称外积只能存
         #        token 身份 payload；GDN/DeltaNet 的 v 为独立学习投影。配对召回差距（rep 2.84

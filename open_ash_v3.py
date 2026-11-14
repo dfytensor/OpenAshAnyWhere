@@ -42,7 +42,7 @@ class MaxStateSuper(torch.nn.Module):
                  kv_delta=False, kv_dim=None, kv_backend='sum', kv_beta_init=0.0, kv_beta_tok=False,
                  em_ref=None, wkey_em=None, state_split=False, kv_out_gdn=False, mem_heads=2,
                  gdn_core=False, k_extra=32, mem_force=False, asym_delta=False, mem_extra=False,
-                 kv_value_proj=False, kv_q_l2norm=False):
+                 kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -140,6 +140,15 @@ class MaxStateSuper(torch.nn.Module):
                 # v5.3Q: 检索 query L2 归一化（GDN 的 use_qk_l2norm_in_kernel=True 语义）——
                 #        我们归一化 k 但从不归一化 q；读出锐度随位置漂移的嫌疑
                 self.kv_q_l2norm = kv_q_l2norm
+                # v5.3G: 输入调制衰减（GDN 的 a_proj/dt_bias 语义隔离）——静态逐头衰减改为
+                #        g_t = -exp(kv_loga)·softplus(a_proj(x_t)+dt_bias)；a_proj 零初始化 +
+                #        dt_bias=softplus⁻¹(1) → 起点等价当前静态衰减，训练中学习逐 token 调制
+                self.kv_decay_mod = kv_decay_mod
+                if kv_decay_mod:
+                    self.kv_a_proj = nn.Linear(dim_size, heads, bias=False)
+                    with torch.no_grad():
+                        self.kv_a_proj.weight.zero_()
+                    self.kv_dt_bias = nn.Parameter(torch.full((heads,), 0.5413))
 
         # v1/v2 为 4 路投影；v3 中 c 路改由 state_em 查表提供，故只需 3 路
         if em_ref is not None:
@@ -246,7 +255,13 @@ class MaxStateSuper(torch.nn.Module):
             bx, sx = x.shape[0], x.shape[1]
             if not self.gdn_core:
                 qq = self.q_proj(x).view(bx, sx, self.heads, self.kv_dh).permute(0, 2, 1, 3)
-            log_a = (-torch.nn.functional.softplus(self.kv_loga)).view(1, -1, 1).expand(bx, self.heads, sx)
+            if self.kv_decay_mod:
+                # v5.3G: 输入调制衰减 g_t = -exp(A_log)·softplus(a_proj(x_t)+dt_bias)（逐 token）
+                dt = F.softplus(self.kv_a_proj(x).view(bx, sx, self.heads)
+                                + self.kv_dt_bias.view(1, 1, -1))
+                log_a = (-torch.exp(self.kv_loga).view(1, 1, -1) * dt).permute(0, 2, 1)
+            else:
+                log_a = (-torch.nn.functional.softplus(self.kv_loga)).view(1, -1, 1).expand(bx, self.heads, sx)
         infer_mode = (not torch.is_grad_enabled()) and _fused_available(c) and self.use_fused
         if infer_mode:
             e = tops._CumMaxFn.apply(c, e_st, dv, db)
@@ -636,7 +651,7 @@ class DecoderLayer(torch.nn.Module):
                  em_ref=None, ffn_hidden=None, wkey_em=None, moe_ffn=False,
                  state_split=False, kv_out_gdn=False, mem_heads=2, gdn_core=False,
                  mem_force=False, asym_delta=False, mem_extra=False, kv_value_proj=False,
-                 kv_q_l2norm=False):
+                 kv_q_l2norm=False, kv_decay_mod=False):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
@@ -650,7 +665,8 @@ class DecoderLayer(torch.nn.Module):
                                                    mem_force=mem_force, asym_delta=asym_delta,
                                                    mem_extra=mem_extra,
                                                    kv_value_proj=kv_value_proj,
-                                                   kv_q_l2norm=kv_q_l2norm)
+                                                   kv_q_l2norm=kv_q_l2norm,
+                                                   kv_decay_mod=kv_decay_mod)
         if em_ref is not None:
             # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
             fh = ffn_hidden or hidden_size
@@ -772,7 +788,7 @@ class OpenASH_V3(torch.nn.Module):
                  em_weights=False, ffn_hidden=None, id_weight=False, wkey_rank=64, tied_head=False,
                  moe_ffn=False, state_split=False, kv_out_gdn=False, no_pos=False, mem_heads=2,
                  gdn_core=False, mem_force=False, asym_delta=False, mem_extra=False,
-                 kv_value_proj=False, kv_q_l2norm=False):
+                 kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -799,7 +815,7 @@ class OpenASH_V3(torch.nn.Module):
                           kv_out_gdn=kv_out_gdn,
                           gdn_core=gdn_core, mem_force=mem_force, asym_delta=asym_delta,
                           mem_extra=mem_extra, kv_value_proj=kv_value_proj,
-                          kv_q_l2norm=kv_q_l2norm)
+                          kv_q_l2norm=kv_q_l2norm, kv_decay_mod=kv_decay_mod)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights
