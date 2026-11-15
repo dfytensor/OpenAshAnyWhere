@@ -22,6 +22,26 @@ def _fused_available(x):
     return tops is not None and tops.TRITON_OK and x.is_cuda
 
 
+class FactorizedEmbedding(torch.nn.Module):
+    """v5.3EF: em = E(voc,R) @ P(R,dim)——因子化省参（R=192 省 ~13.1M）。
+    暴露 .weight 属性返回物化矩阵，保持 EmLinear `em.weight[lo:hi]` 切片契约不变；
+    padding_idx=0 行置零（与原 nn.Embedding(padding_idx=0) 一致）。"""
+
+    def __init__(self, voc_size, rank, out_dim, padding_idx=0):
+        super().__init__()
+        self.E = torch.nn.Embedding(voc_size, rank)
+        self.P = torch.nn.Linear(rank, out_dim, bias=False)
+        with torch.no_grad():
+            self.E.weight[padding_idx].zero_()
+
+    @property
+    def weight(self):
+        return self.P(self.E.weight)
+
+    def forward(self, x):
+        return self.P(self.E(x))
+
+
 class MaxStateSuper(torch.nn.Module):
     """v3 核心：cummax 的输入流 c 来自本层专属词嵌入，不再由 combined 投影产生。
 
@@ -42,7 +62,7 @@ class MaxStateSuper(torch.nn.Module):
                  kv_delta=False, kv_dim=None, kv_backend='sum', kv_beta_init=0.0, kv_beta_tok=False,
                  em_ref=None, wkey_em=None, state_split=False, kv_out_gdn=False, mem_heads=2,
                  gdn_core=False, k_extra=32, mem_force=False, asym_delta=False, mem_extra=False,
-                 kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False):
+                 kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False, pure_read=False):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -151,6 +171,7 @@ class MaxStateSuper(torch.nn.Module):
                     self.kv_dt_bias = nn.Parameter(torch.full((heads,), 0.5413))
 
         # v1/v2 为 4 路投影；v3 中 c 路改由 state_em 查表提供，故只需 3 路
+        self.pure_read = pure_read
         if em_ref is not None:
             self.combined = EmLinear(3 * dim_size, em_ref, 0, dim_size)
         else:
@@ -418,8 +439,10 @@ class MaxStateSuper(torch.nn.Module):
                         initial_state=s_kv, output_final_state=True,
                         use_qk_l2norm_in_kernel=False)
                 # o (B,S,H,kv_dh) → gen_model 布局 (B,d_head,S,H)
-                if self.state_split:
+                if self.state_split and not self.pure_read:
                     # v4.2: 多位读取——aux 读出（同记忆的不同读取视角），per-head 混合
+                    # v5.3R0: pure_read=True 时切除 aux（诊断：模型长训练中主动调低 aux 权重
+                    #         0.95→0.88——它想要更纯的主读出；锚定冻结实验亦证明纯主读无害）
                     o_aux = torch.einsum('bshd,hde->bshe', o, self.o_read.to(o.dtype))
                     mix = torch.sigmoid(self.o_mix).view(1, 1, -1, 1).to(o.dtype)
                     o = mix * o + (1 - mix) * o_aux
@@ -466,8 +489,8 @@ class MaxStateSuper(torch.nn.Module):
                     qq_r = qq_r / (qq_r.norm(dim=-1, keepdim=True) + 1e-6)
                 r = torch.einsum('bhd,bhdv->bhv', qq_r, s_new) \
                     * float(self.kv_dh) ** -0.5                         # 锚定 chunk_fwd_o scale
-                if self.state_split:
-                    # v4.2: aux 读出在 kv_dh 空间先做（W_out_state 压缩之前）
+                if self.state_split and not self.pure_read:
+                    # v4.2: aux 读出在 kv_dh 空间先做（W_out_state 压缩之前）；v5.3R0 切除见上
                     r_aux = torch.einsum('bhd,hde->bhe', r, self.o_read.to(r.dtype))
                     mix = torch.sigmoid(self.o_mix).view(1, -1, 1).to(r.dtype)
                     r = mix * r + (1 - mix) * r_aux
@@ -651,7 +674,7 @@ class DecoderLayer(torch.nn.Module):
                  em_ref=None, ffn_hidden=None, wkey_em=None, moe_ffn=False,
                  state_split=False, kv_out_gdn=False, mem_heads=2, gdn_core=False,
                  mem_force=False, asym_delta=False, mem_extra=False, kv_value_proj=False,
-                 kv_q_l2norm=False, kv_decay_mod=False, moe_experts=4):
+                 kv_q_l2norm=False, kv_decay_mod=False, moe_experts=4, pure_read=False):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
@@ -666,7 +689,8 @@ class DecoderLayer(torch.nn.Module):
                                                    mem_extra=mem_extra,
                                                    kv_value_proj=kv_value_proj,
                                                    kv_q_l2norm=kv_q_l2norm,
-                                                   kv_decay_mod=kv_decay_mod)
+                                                   kv_decay_mod=kv_decay_mod,
+                                                   pure_read=pure_read)
         if em_ref is not None:
             # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
             fh = ffn_hidden or hidden_size
@@ -788,12 +812,17 @@ class OpenASH_V3(torch.nn.Module):
                  em_weights=False, ffn_hidden=None, id_weight=False, wkey_rank=64, tied_head=False,
                  moe_ffn=False, state_split=False, kv_out_gdn=False, no_pos=False, mem_heads=2,
                  gdn_core=False, mem_force=False, asym_delta=False, mem_extra=False,
-                 kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False, moe_experts=4):
+                 kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False, moe_experts=4,
+                 em_factor_r=None, pure_read=False):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
 
-        self.em = torch.nn.Embedding(voc_size, hidden_size, padding_idx=0)
+        if em_factor_r:
+            # v5.3EF: em 因子化 E(voc,R)@P(R,dim)——等规模资金来源（R=192 省 ~13.1M）
+            self.em = FactorizedEmbedding(voc_size, em_factor_r, hidden_size)
+        else:
+            self.em = torch.nn.Embedding(voc_size, hidden_size, padding_idx=0)
         # v4.1: token-id 查表权重调制通路（state_em 模式；共享一张表服务所有层）
         self.wkey_em = nn.Embedding(voc_size, wkey_rank) if id_weight else None
         nn.init.normal_(self.wkey_em.weight, mean=0.0, std=0.02) if self.wkey_em is not None else None
@@ -816,7 +845,7 @@ class OpenASH_V3(torch.nn.Module):
                           gdn_core=gdn_core, mem_force=mem_force, asym_delta=asym_delta,
                           mem_extra=mem_extra, kv_value_proj=kv_value_proj,
                           kv_q_l2norm=kv_q_l2norm, kv_decay_mod=kv_decay_mod,
-                          moe_experts=moe_experts)
+                          moe_experts=moe_experts, pure_read=pure_read)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights
