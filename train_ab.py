@@ -159,6 +159,19 @@ def build(arch):
                           short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
                           mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
                           kv_beta_tok=True)
+    if arch == 'v53d7':
+        # v5.3D7: 等规模最后一杠杆——深度轴。em 因子化 R=192（省 13.1M ≈ 一层）兑换第 7 层
+        #         （kv256 状态 7×295K = 3.67M 总量，深度 7 vs GDN 5 层深度优势）；
+        #         ~104.4M ≈ GDN 106.3M 的 98.2%（等规模约束内）
+        return OpenASH_V3(VOC, HID, 8, 7, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192)
     if arch == 'v53ef':
         # v5.3EF: 等规模资金来源实验——em 因子化 R=192（省 13.1M）兑换 kv384 状态
         #        （8×384×384×6 = 7.08M 元素 = GDN 3.93M 的 1.8×）；104.5M ≈ GDN 106.3M 的 98.3%。
