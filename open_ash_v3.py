@@ -62,7 +62,8 @@ class MaxStateSuper(torch.nn.Module):
                  kv_delta=False, kv_dim=None, kv_backend='sum', kv_beta_init=0.0, kv_beta_tok=False,
                  em_ref=None, wkey_em=None, state_split=False, kv_out_gdn=False, mem_heads=2,
                  gdn_core=False, k_extra=32, mem_force=False, asym_delta=False, mem_extra=False,
-                 kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False, pure_read=False):
+                 kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False, pure_read=False,
+                 kv_ogate=False):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -160,6 +161,12 @@ class MaxStateSuper(torch.nn.Module):
                 # v5.3Q: 检索 query L2 归一化（GDN 的 use_qk_l2norm_in_kernel=True 语义）——
                 #        我们归一化 k 但从不归一化 q；读出锐度随位置漂移的嫌疑
                 self.kv_q_l2norm = kv_q_l2norm
+                # v5.3OG: GDN 输出级复刻——逐头 RMS over kv_dh + o_norm 权重 + sigmoid 输入门
+                #        （我们原 RMS 跨头轴 + 静态门；GDN 为 per-head RMS + 输入相关 sigmoid 门）
+                self.kv_ogate = kv_ogate
+                if kv_ogate:
+                    self.o_norm_w = nn.Parameter(torch.ones(self.kv_dh))
+                    self.kv_g_proj = nn.Linear(dim_size, self.heads * self.kv_dh, bias=False)
                 # v5.3G: 输入调制衰减（GDN 的 a_proj/dt_bias 语义隔离）——静态逐头衰减改为
                 #        g_t = -exp(kv_loga)·softplus(a_proj(x_t)+dt_bias)；a_proj 零初始化 +
                 #        dt_bias=softplus⁻¹(1) → 起点等价当前静态衰减，训练中学习逐 token 调制
@@ -224,7 +231,10 @@ class MaxStateSuper(torch.nn.Module):
 
     def _kv_out(self, o_p):
         """KV 通道输出进入残差：默认 scalar kv_gate（零初始化渐进启用）；
-        v4.3 GDN 式：RMS 归一化 + per-channel 门（通道恒开）。"""
+        v4.3 GDN 式：RMS 归一化 + per-channel 门（通道恒开）。
+        v5.3OG: kv_ogate 时输出级由调用方（GDN 输出级）处理，此处纯直通。"""
+        if self.kv_ogate:
+            return o_p
         if self.kv_out_gdn:
             # 逐 token RMS（仅 heads 维）：与解码侧 S=1 统计口径一致（解码精确性前提）
             rms = o_p.float().pow(2).mean(dim=3, keepdim=True).add_(1e-6).rsqrt().to(o_p.dtype)
@@ -446,6 +456,12 @@ class MaxStateSuper(torch.nn.Module):
                     o_aux = torch.einsum('bshd,hde->bshe', o, self.o_read.to(o.dtype))
                     mix = torch.sigmoid(self.o_mix).view(1, 1, -1, 1).to(o.dtype)
                     o = mix * o + (1 - mix) * o_aux
+                if self.kv_ogate:
+                    # v5.3OG: GDN 输出级——逐头 RMS over kv_dh + o_norm 权重 + sigmoid 输入门
+                    rms = o.float().pow(2).mean(dim=-1, keepdim=True).add_(1e-6).rsqrt()
+                    o = o * rms.to(o.dtype) * self.o_norm_w.to(o.dtype).view(1, 1, 1, -1)
+                    o = o * torch.sigmoid(self.kv_g_proj(x).view(bx, sx, self.heads,
+                                             self.kv_dh)).to(o.dtype)
                 if self.kv_dh > self.d_head:
                     # v5.3W: 状态宽度突破 d_head——逐头 W_out_state 压回 d_head
                     o_out = torch.einsum('bshd,hde->bshe', o, self.W_out_state.to(o.dtype))
@@ -494,6 +510,12 @@ class MaxStateSuper(torch.nn.Module):
                     r_aux = torch.einsum('bhd,hde->bhe', r, self.o_read.to(r.dtype))
                     mix = torch.sigmoid(self.o_mix).view(1, -1, 1).to(r.dtype)
                     r = mix * r + (1 - mix) * r_aux
+                if self.kv_ogate:
+                    # v5.3OG: 解码侧 GDN 输出级（逐头 RMS + o_norm + sigmoid 门）
+                    rms = r.float().pow(2).mean(dim=-1, keepdim=True).add_(1e-6).rsqrt()
+                    r = r * rms.to(r.dtype) * self.o_norm_w.to(r.dtype).view(1, 1, -1)
+                    r = r * torch.sigmoid(self.kv_g_proj(x).view(b, 1, self.heads,
+                                          self.kv_dh)).to(r.dtype).squeeze(1)
                 if self.kv_dh > self.d_head:
                     r = torch.einsum('bhd,hde->bhe', r, self.W_out_state.to(r.dtype))
                 s_kv_new = s_new
@@ -674,7 +696,8 @@ class DecoderLayer(torch.nn.Module):
                  em_ref=None, ffn_hidden=None, wkey_em=None, moe_ffn=False,
                  state_split=False, kv_out_gdn=False, mem_heads=2, gdn_core=False,
                  mem_force=False, asym_delta=False, mem_extra=False, kv_value_proj=False,
-                 kv_q_l2norm=False, kv_decay_mod=False, moe_experts=4, pure_read=False):
+                 kv_q_l2norm=False, kv_decay_mod=False, moe_experts=4, pure_read=False,
+                 kv_ogate=False):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
@@ -690,7 +713,8 @@ class DecoderLayer(torch.nn.Module):
                                                    kv_value_proj=kv_value_proj,
                                                    kv_q_l2norm=kv_q_l2norm,
                                                    kv_decay_mod=kv_decay_mod,
-                                                   pure_read=pure_read)
+                                                   pure_read=pure_read,
+                                                   kv_ogate=kv_ogate)
         if em_ref is not None:
             # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
             fh = ffn_hidden or hidden_size
@@ -813,7 +837,7 @@ class OpenASH_V3(torch.nn.Module):
                  moe_ffn=False, state_split=False, kv_out_gdn=False, no_pos=False, mem_heads=2,
                  gdn_core=False, mem_force=False, asym_delta=False, mem_extra=False,
                  kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False, moe_experts=4,
-                 em_factor_r=None, pure_read=False):
+                 em_factor_r=None, pure_read=False, kv_ogate=False):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -845,7 +869,8 @@ class OpenASH_V3(torch.nn.Module):
                           gdn_core=gdn_core, mem_force=mem_force, asym_delta=asym_delta,
                           mem_extra=mem_extra, kv_value_proj=kv_value_proj,
                           kv_q_l2norm=kv_q_l2norm, kv_decay_mod=kv_decay_mod,
-                          moe_experts=moe_experts, pure_read=pure_read)
+                          moe_experts=moe_experts, pure_read=pure_read,
+                          kv_ogate=kv_ogate)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights
