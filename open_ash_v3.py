@@ -651,7 +651,7 @@ class DecoderLayer(torch.nn.Module):
                  em_ref=None, ffn_hidden=None, wkey_em=None, moe_ffn=False,
                  state_split=False, kv_out_gdn=False, mem_heads=2, gdn_core=False,
                  mem_force=False, asym_delta=False, mem_extra=False, kv_value_proj=False,
-                 kv_q_l2norm=False, kv_decay_mod=False):
+                 kv_q_l2norm=False, kv_decay_mod=False, moe_experts=4):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
@@ -672,7 +672,7 @@ class DecoderLayer(torch.nn.Module):
             fh = ffn_hidden or hidden_size
             self.ffn = EmFeedForward(hidden_size, fh, em_ref, ffn_act)
         elif moe_ffn:
-            self.ffn = MoEFeedForward(hidden_size, ffn_act, num_experts=4, topk=2,
+            self.ffn = MoEFeedForward(hidden_size, ffn_act, num_experts=moe_experts, topk=2,
                                       expert_hidden=(ffn_hidden or hidden_size) // 2)
         else:
             self.ffn = FeedForward(hidden_size, ffn_act)
@@ -788,7 +788,7 @@ class OpenASH_V3(torch.nn.Module):
                  em_weights=False, ffn_hidden=None, id_weight=False, wkey_rank=64, tied_head=False,
                  moe_ffn=False, state_split=False, kv_out_gdn=False, no_pos=False, mem_heads=2,
                  gdn_core=False, mem_force=False, asym_delta=False, mem_extra=False,
-                 kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False):
+                 kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False, moe_experts=4):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -815,7 +815,8 @@ class OpenASH_V3(torch.nn.Module):
                           kv_out_gdn=kv_out_gdn,
                           gdn_core=gdn_core, mem_force=mem_force, asym_delta=asym_delta,
                           mem_extra=mem_extra, kv_value_proj=kv_value_proj,
-                          kv_q_l2norm=kv_q_l2norm, kv_decay_mod=kv_decay_mod)
+                          kv_q_l2norm=kv_q_l2norm, kv_decay_mod=kv_decay_mod,
+                          moe_experts=moe_experts)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights

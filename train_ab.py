@@ -147,6 +147,29 @@ def build(arch):
                           kv_dim=192, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
                           mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True)
+    if arch == 'v53e2':
+        # v5.3E2: 等规模状态比例重分配——kv256 状态全额保留，FFN 专家 4→2，
+        #         104.8M 严格低于 GDN 106.3M（用户命题：只调状态比例、同规模达 GDN 水平）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
+                          kv_beta_tok=True)
+    if arch == 'v53k':
+        # v5.3K: kv_dim 256（每层状态 8×256×256 = 524K = GDN 786K 的 67%）——容量阶梯第三级
+        #        （96→192 已证 LM −2.7%；256 为 kernel 极限探测位）；~131M 如实披露
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True)
     if arch == 'v53g':
         # v5.3G: 输入调制衰减（GDN 三件套最后一件的语义隔离）——g_t = -exp(A_log)·
         #        softplus(a_proj(x_t)+dt_bias)，静态逐头衰减 → 逐 token 调制；起点等价静态。
