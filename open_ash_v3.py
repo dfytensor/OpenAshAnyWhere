@@ -63,7 +63,7 @@ class MaxStateSuper(torch.nn.Module):
                  em_ref=None, wkey_em=None, state_split=False, kv_out_gdn=False, mem_heads=2,
                  gdn_core=False, k_extra=32, mem_force=False, asym_delta=False, mem_extra=False,
                  kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False, pure_read=False,
-                 kv_ogate=False):
+                 kv_ogate=False, kv_v_dim=None):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -167,6 +167,13 @@ class MaxStateSuper(torch.nn.Module):
                 if kv_ogate:
                     self.o_norm_w = nn.Parameter(torch.ones(self.kv_dh))
                     self.kv_g_proj = nn.Linear(dim_size, self.heads * self.kv_dh, bias=False)
+                # v5.3V384: 值侧扩展——v_extra 投影 + W_v 读出压缩（V>kv_dh 时启用）
+                self.kv_v_dim = kv_v_dim
+                if kv_v_dim is not None and kv_v_dim > self.kv_dh:
+                    self.v_extra_proj = nn.Linear(
+                        dim_size, self.heads * (kv_v_dim - self.kv_dh), bias=False)
+                    self.W_v = nn.Parameter(
+                        torch.randn(self.heads, kv_v_dim, self.d_head) * 0.02)
                 # v5.3G: 输入调制衰减（GDN 的 a_proj/dt_bias 语义隔离）——静态逐头衰减改为
                 #        g_t = -exp(kv_loga)·softplus(a_proj(x_t)+dt_bias)；a_proj 零初始化 +
                 #        dt_bias=softplus⁻¹(1) → 起点等价当前静态衰减，训练中学习逐 token 调制
@@ -421,6 +428,12 @@ class MaxStateSuper(torch.nn.Module):
                 kk_f = kk.permute(0, 2, 1, 3).float()        # (B,S,H,kv_dh) 归一化键
                 if self.kv_value_proj is not None:
                     vv_f = self.kv_value_proj(x).view(bx, sx, self.heads, self.kv_dh).float()
+                elif self.kv_v_dim is not None and self.kv_v_dim > self.kv_dh:
+                    # v5.3V384: 值拼接扩展——v = concat(k̂_256, v_extra_128)，状态 K×[0:256] 块
+                    #           保持对称 k̂⊗k̂（承重墙），[256:384] 块为新内容容量；K 顶 kernel 帽 256
+                    vex_f = self.v_extra_proj(x).view(bx, sx, self.heads,
+                                                      self.kv_v_dim - self.kv_dh).float()
+                    vv_f = torch.cat([kk_f.float(), vex_f], dim=-1)
                 else:
                     vv_f = kk_f.float()                      # delta 写入 v = k（旧约定）
                 g_f = log_a.permute(0, 2, 1).float()         # (B,S,H) log 域衰减
@@ -462,7 +475,11 @@ class MaxStateSuper(torch.nn.Module):
                     o = o * rms.to(o.dtype) * self.o_norm_w.to(o.dtype).view(1, 1, 1, -1)
                     o = o * torch.sigmoid(self.kv_g_proj(x).view(bx, sx, self.heads,
                                              self.kv_dh)).to(o.dtype)
-                if self.kv_dh > self.d_head:
+                if self.kv_v_dim is not None and self.kv_v_dim > self.kv_dh:
+                    # v5.3V384: o (B,S,H,V=384) 经 W_v 压回 d_head（值侧扩展读出）
+                    o_out = torch.einsum('bshd,hde->bshe', o, self.W_v.to(o.dtype))
+                    o_p = o_out.permute(0, 3, 1, 2)               # (B,d_head,S,H)
+                elif self.kv_dh > self.d_head:
                     # v5.3W: 状态宽度突破 d_head——逐头 W_out_state 压回 d_head
                     o_out = torch.einsum('bshd,hde->bshe', o, self.W_out_state.to(o.dtype))
                     o_p = o_out.permute(0, 3, 1, 2)               # (B,d_head,S,H)
@@ -495,6 +512,12 @@ class MaxStateSuper(torch.nn.Module):
                 if self.kv_value_proj is not None:
                     vd = self.kv_value_proj(x).view(b, sx, self.heads, self.kv_dh) \
                         .float().squeeze(1)                            # (B,H,D)
+                elif self.kv_v_dim is not None and self.kv_v_dim > self.kv_dh:
+                    # v5.3V384: v = concat(k̂_256, v_extra_128)——承重墙半区 + 内容容量半区
+                    vex_d = self.v_extra_proj(x).view(b, sx, self.heads,
+                                                      self.kv_v_dim - self.kv_dh) \
+                        .float().squeeze(1)                            # (B,H,Vext)
+                    vd = torch.cat([kd, vex_d], dim=-1)                # (B,H,V)
                 else:
                     vd = kd
                 corr = vd - a_step.unsqueeze(-1) * sv                  # (B,H,D)
@@ -505,6 +528,9 @@ class MaxStateSuper(torch.nn.Module):
                     qq_r = qq_r / (qq_r.norm(dim=-1, keepdim=True) + 1e-6)
                 r = torch.einsum('bhd,bhdv->bhv', qq_r, s_new) \
                     * float(self.kv_dh) ** -0.5                         # 锚定 chunk_fwd_o scale
+                if self.kv_v_dim is not None and self.kv_v_dim > self.kv_dh:
+                    # v5.3V384: 值侧扩展读出压缩（V→d_head），替代 W_out_state（互斥）
+                    r = torch.einsum('bhd,hde->bhe', r, self.W_v.to(r.dtype))
                 if self.state_split and not self.pure_read:
                     # v4.2: aux 读出在 kv_dh 空间先做（W_out_state 压缩之前）；v5.3R0 切除见上
                     r_aux = torch.einsum('bhd,hde->bhe', r, self.o_read.to(r.dtype))
@@ -516,7 +542,7 @@ class MaxStateSuper(torch.nn.Module):
                     r = r * rms.to(r.dtype) * self.o_norm_w.to(r.dtype).view(1, 1, -1)
                     r = r * torch.sigmoid(self.kv_g_proj(x).view(b, 1, self.heads,
                                           self.kv_dh)).to(r.dtype).squeeze(1)
-                if self.kv_dh > self.d_head:
+                if self.kv_dh > self.d_head and self.kv_v_dim is None:
                     r = torch.einsum('bhd,hde->bhe', r, self.W_out_state.to(r.dtype))
                 s_kv_new = s_new
             elif s_kv is not None and sx == 1:
@@ -697,7 +723,7 @@ class DecoderLayer(torch.nn.Module):
                  state_split=False, kv_out_gdn=False, mem_heads=2, gdn_core=False,
                  mem_force=False, asym_delta=False, mem_extra=False, kv_value_proj=False,
                  kv_q_l2norm=False, kv_decay_mod=False, moe_experts=4, pure_read=False,
-                 kv_ogate=False):
+                 kv_ogate=False, kv_v_dim=None):
         super(DecoderLayer, self).__init__()
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
                                                    use_fused, state_rank, use_decay,
@@ -714,7 +740,8 @@ class DecoderLayer(torch.nn.Module):
                                                    kv_q_l2norm=kv_q_l2norm,
                                                    kv_decay_mod=kv_decay_mod,
                                                    pure_read=pure_read,
-                                                   kv_ogate=kv_ogate)
+                                                   kv_ogate=kv_ogate,
+                                                   kv_v_dim=kv_v_dim)
         if em_ref is not None:
             # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
             fh = ffn_hidden or hidden_size
@@ -837,7 +864,7 @@ class OpenASH_V3(torch.nn.Module):
                  moe_ffn=False, state_split=False, kv_out_gdn=False, no_pos=False, mem_heads=2,
                  gdn_core=False, mem_force=False, asym_delta=False, mem_extra=False,
                  kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False, moe_experts=4,
-                 em_factor_r=None, pure_read=False, kv_ogate=False):
+                 em_factor_r=None, pure_read=False, kv_ogate=False, kv_v_dim=None):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -870,7 +897,7 @@ class OpenASH_V3(torch.nn.Module):
                           mem_extra=mem_extra, kv_value_proj=kv_value_proj,
                           kv_q_l2norm=kv_q_l2norm, kv_decay_mod=kv_decay_mod,
                           moe_experts=moe_experts, pure_read=pure_read,
-                          kv_ogate=kv_ogate)
+                          kv_ogate=kv_ogate, kv_v_dim=kv_v_dim)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights

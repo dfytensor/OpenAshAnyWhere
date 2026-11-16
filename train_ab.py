@@ -222,6 +222,19 @@ def build(arch):
                           short_conv=True, moe_ffn=True, moe_experts=3, state_split=True,
                           mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
                           kv_beta_tok=True, em_factor_r=192)
+    if arch == 'v53v384':
+        # v5.3V384: 值侧扩展再战 kv384——K 顶 kernel 帽(256)，V 扩到 384（FLA 无 V 帽，
+        #          GDN 自身即 K256/V512）；v = concat(k̂_256, v_extra_128) 保承重墙；
+        #        状态 8×256×384 = 786K/层 = GDN 逐层持平、总量 1.2×；~139.6M（+31.4% 如实披露）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_v_dim=384, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
+                          pure_read=True)
     if arch == 'v53ef':
         # v5.3EF: 等规模资金来源实验——em 因子化 R=192（省 13.1M）兑换 kv384 状态
         #        （8×384×384×6 = 7.08M 元素 = GDN 3.93M 的 1.8×）；104.5M ≈ GDN 106.3M 的 98.3%。
