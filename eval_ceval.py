@@ -34,9 +34,12 @@ def build(arch):
                   kv_channel=True, kv_decay=0.98)
         if arch in ('v35', 'v34'):
             kw.update(kv_norm_keys=True, kv_beta=True)
-    m = OpenASH_V3(23004, 768, 8, 12, max_seq_len=2048, model_flag='train',
-                   use_fused=True, use_decay=True, **kw)
-    return m
+        m = OpenASH_V3(23004, 768, 8, 12, max_seq_len=2048, model_flag='train',
+                       use_fused=True, use_decay=True, **kw)
+        return m
+    # v5.3+: v53 系架构统一走 train_ab.build（单一配置真相源）
+    from train_ab import build as tab_build
+    return tab_build(arch)
 
 
 def load_ckpt(m, path):

@@ -1,0 +1,29 @@
+词表大小 23003
+代理词表大小 2094
+letter token ids: {'A': 66, 'B': 84, 'C': 71, 'D': 85}
+  [8/48] running acc: 24.49% (60/245)
+  [16/48] running acc: 25.59% (119/465)
+  [24/48] running acc: 25.45% (168/660)
+  [32/48] running acc: 24.67% (203/823)
+  [40/48] running acc: 23.88% (234/980)
+  [48/48] running acc: 24.08% (301/1250)
+
+===== C-Eval (F:\OpenASH2605\sft_v53f1\model.pt) =====
+total: 1250 questions | acc: 24.08%
+  top: art_studies 45%
+  top: high_school_geography 42%
+  top: college_economics 38%
+  top: chinese_language_and_literature 35%
+  top: modern_chinese_history 35%
+  top: veterinary_medicine 35%
+  top: business_administration 33%
+  top: plant_protection 32%
+  low: middle_school_geography 0%
+  low: middle_school_chemistry 10%
+  low: basic_medicine 11%
+  low: college_physics 11%
+  low: computer_network 11%
+  low: civil_servant 11%
+  low: legal_professional 13%
+  low: middle_school_biology 14%
+saved ceval_sft_v53f1.json
