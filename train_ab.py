@@ -196,6 +196,32 @@ def build(arch):
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
                           mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
                           pure_read=True)
+    if arch == 'v53f1':
+        # v5.3F1: 三兄弟架构融合（用户命题）——kr 宽状态(kv256)+6层 × e2↔kr 专家中位(3)
+        #         × d7 em 因子化(R=192，中性已证) ≈ 105.9M = GDN 99.6%（严格等规模）。
+        #         从零重训（非蒸馏），等规模验证融合架构能否超越三兄弟单模（kr 9.58 / e2 9.98）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=3, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192)
+    if arch == 'v53f1':
+        # v5.3F1: 三兄弟架构融合（用户命题）——kr 宽状态(kv256)+6层 × e2↔kr 专家中位(3)
+        #         × d7 em 因子化(R=192，中性已证) ≈ 105.9M = GDN 99.6%（严格等规模）。
+        #         从零重训（非蒸馏），等规模验证融合架构能否超越三兄弟单模（kr 9.58 / e2 9.98）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=3, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192)
     if arch == 'v53ef':
         # v5.3EF: 等规模资金来源实验——em 因子化 R=192（省 13.1M）兑换 kv384 状态
         #        （8×384×384×6 = 7.08M 元素 = GDN 3.93M 的 1.8×）；104.5M ≈ GDN 106.3M 的 98.3%。
