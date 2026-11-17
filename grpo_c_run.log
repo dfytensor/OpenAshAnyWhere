@@ -1,0 +1,56 @@
+词表大小 23003
+代理词表大小 2094
+dev pool: 1200 prompt variants (rot=5) | letter ids: [66, 84, 71, 85]
+base loaded | missing=0 unexpected=0
+[step    1] sample_acc 0.188 mean_reward 0.031 | loss +0.8111 | 2.9 s/step
+[step   10] sample_acc 0.354 mean_reward 0.059 | loss +0.0312 | 1.7 s/step
+[step   20] sample_acc 0.146 mean_reward 0.024 | loss +0.0754 | 1.6 s/step
+[step   30] sample_acc 0.688 mean_reward 0.115 | loss +0.1625 | 1.6 s/step
+[step   40] sample_acc 0.500 mean_reward 0.083 | loss +0.3260 | 1.6 s/step
+[step   50] sample_acc 0.521 mean_reward 0.087 | loss +0.0044 | 1.6 s/step
+[step   60] sample_acc 0.604 mean_reward 0.101 | loss -0.2311 | 1.6 s/step
+[step   70] sample_acc 0.562 mean_reward 0.094 | loss +0.1414 | 1.6 s/step
+[step   80] sample_acc 0.479 mean_reward 0.080 | loss +0.0872 | 1.6 s/step
+[step   90] sample_acc 0.771 mean_reward 0.128 | loss +0.1204 | 1.5 s/step
+[step  100] sample_acc 0.729 mean_reward 0.122 | loss +0.0810 | 1.5 s/step
+[step  110] sample_acc 0.812 mean_reward 0.135 | loss -0.2639 | 1.5 s/step
+[step  120] sample_acc 0.562 mean_reward 0.094 | loss -0.0064 | 1.5 s/step
+[step  130] sample_acc 0.583 mean_reward 0.097 | loss -0.1911 | 1.5 s/step
+[step  140] sample_acc 0.667 mean_reward 0.111 | loss +0.0377 | 1.5 s/step
+[step  150] sample_acc 0.729 mean_reward 0.122 | loss -0.0883 | 1.6 s/step
+[step  160] sample_acc 0.708 mean_reward 0.118 | loss -0.1894 | 1.6 s/step
+[step  170] sample_acc 0.833 mean_reward 0.139 | loss -0.0690 | 1.6 s/step
+[step  180] sample_acc 0.646 mean_reward 0.108 | loss -0.0887 | 1.6 s/step
+[step  190] sample_acc 0.896 mean_reward 0.149 | loss -0.2472 | 1.6 s/step
+[step  200] sample_acc 0.875 mean_reward 0.146 | loss +0.0082 | 1.5 s/step
+[step  210] sample_acc 0.896 mean_reward 0.149 | loss -0.0538 | 1.6 s/step
+[step  220] sample_acc 0.729 mean_reward 0.122 | loss -0.0929 | 1.6 s/step
+[step  230] sample_acc 0.854 mean_reward 0.142 | loss -0.1339 | 1.6 s/step
+[step  240] sample_acc 0.708 mean_reward 0.118 | loss -0.0328 | 1.6 s/step
+[step  250] sample_acc 0.875 mean_reward 0.146 | loss +0.0195 | 1.6 s/step
+[step  260] sample_acc 0.979 mean_reward 0.163 | loss -0.1810 | 1.6 s/step
+[step  270] sample_acc 0.750 mean_reward 0.125 | loss -0.2207 | 1.6 s/step
+[step  280] sample_acc 0.875 mean_reward 0.146 | loss -0.0012 | 1.6 s/step
+[step  290] sample_acc 0.583 mean_reward 0.097 | loss -0.1891 | 1.6 s/step
+[step  300] sample_acc 0.958 mean_reward 0.160 | loss -0.0697 | 1.6 s/step
+[step  310] sample_acc 0.979 mean_reward 0.163 | loss -0.1349 | 1.6 s/step
+[step  320] sample_acc 0.979 mean_reward 0.163 | loss -0.1713 | 1.6 s/step
+[step  330] sample_acc 1.000 mean_reward 0.167 | loss -0.0013 | 1.6 s/step
+[step  340] sample_acc 1.000 mean_reward 0.167 | loss -0.0023 | 1.6 s/step
+[step  350] sample_acc 1.000 mean_reward 0.167 | loss +0.0013 | 1.6 s/step
+[step  360] sample_acc 0.833 mean_reward 0.139 | loss -0.3493 | 1.6 s/step
+[step  370] sample_acc 0.979 mean_reward 0.163 | loss -0.2278 | 1.6 s/step
+[step  380] sample_acc 0.979 mean_reward 0.163 | loss -0.0953 | 1.6 s/step
+[step  390] sample_acc 0.854 mean_reward 0.142 | loss -0.2202 | 1.6 s/step
+[step  400] sample_acc 0.875 mean_reward 0.146 | loss -0.0011 | 1.6 s/step
+[step  410] sample_acc 0.979 mean_reward 0.163 | loss -0.1372 | 1.6 s/step
+[step  420] sample_acc 0.979 mean_reward 0.163 | loss -0.1702 | 1.6 s/step
+[step  430] sample_acc 0.875 mean_reward 0.146 | loss +0.0201 | 1.6 s/step
+[step  440] sample_acc 0.875 mean_reward 0.146 | loss -0.0009 | 1.6 s/step
+[step  450] sample_acc 0.979 mean_reward 0.163 | loss -0.2094 | 1.6 s/step
+[step  460] sample_acc 0.750 mean_reward 0.125 | loss +0.0015 | 1.6 s/step
+[step  470] sample_acc 1.000 mean_reward 0.167 | loss +0.0079 | 1.6 s/step
+[step  480] sample_acc 0.854 mean_reward 0.142 | loss -0.1343 | 1.6 s/step
+[step  490] sample_acc 0.875 mean_reward 0.146 | loss -0.0013 | 1.6 s/step
+[step  500] sample_acc 0.729 mean_reward 0.122 | loss -0.1337 | 1.6 s/step
+done -> F:\OpenASH2605\grpo_v53f1_c/model.pt
