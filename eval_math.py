@@ -85,7 +85,7 @@ def main():
     for s in sorted(by_steps):
         a, b = by_steps[s]
         print('  %d步题: %d/%d = %.1f%%' % (s, a, b, a / b * 100))
-    base = args.ckpt.replace('/', '_').replace('\\', '_')
+    base = args.ckpt.replace('/', '_').replace('\\', '_').replace(':', '_')
     json.dump({'ckpt': args.ckpt, 'em': n_ok / n, 'n': n, 'by_steps': by_steps},
               open('matheval_' + base + '.json', 'w'), ensure_ascii=False)
     print('saved matheval_%s.json' % base)
