@@ -235,8 +235,37 @@ def build(arch):
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
                           mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
                           pure_read=True)
+    if arch == 'v53rf1':
+        # v5.3RF1: ASH-F1 + 回看通道（ReadChannel，O(1) 逐字回访窗 512 + 2头×64 读注意力
+        #         + 零初始化门）——人类式"有限工作记忆 + 返回去看"机制；数学 CoT 试金石。
+        #        参数 ≈ ASH-F1 + 2.75M（读通道 7 层）；推理状态 +3.7MB（固定）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=3, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192, use_read=True)
+    if arch == 'v53dm':
+        # v5.3DM: 双记忆 Delta 架构（DMDA）——d7 底座（7层 kv256 2专家 em因子化）+ 逐头
+        #        多尺度衰减分化（γ 0.90~0.999 对数散布）+ DMDA 侧记忆（4头×96 纯学习
+        #        k/q/v GDN 几何迷你复刻，内容寻址第二记忆，逐头路由门）；多步 CoT 课程主战场。
+        #        ~108.6M（GDN 102%，近等规模）；侧记忆暂只接 prefill/评测路径（解码态线程后补）
+        return OpenASH_V3(VOC, HID, 8, 7, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192, use_read=False,
+                          dm_state=True, kv_decay_spread=True,
+                          kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999)
     if arch == 'v53ef':
-        # v5.3EF: 等规模资金来源实验——em 因子化 R=192（省 13.1M）兑换 kv384 状态
+        # v5.3EF: 等规模资金来源实验——em 因子化 R=192（省 13.1M）兑换 kv256 状态
         #        （8×384×384×6 = 7.08M 元素 = GDN 3.93M 的 1.8×）；104.5M ≈ GDN 106.3M 的 98.3%。
         #        命题：同规模、只调状态比例（FFN 与 em 份额 → 状态份额）逼近 GDN LM
         return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
@@ -244,7 +273,7 @@ def build(arch):
                           pre_norm=True, ffn_act='silu',
                           decay_init=(0.0001, 0.35), decay_v_std=0.04,
                           kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
-                          kv_dim=384, kv_backend='delta_fla', kv_beta_init=4.0,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
                           mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
                           kv_beta_tok=True, em_factor_r=192)

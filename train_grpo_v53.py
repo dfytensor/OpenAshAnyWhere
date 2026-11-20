@@ -31,16 +31,21 @@ def fmt_row(r, with_ans):
     return s
 
 
-def load_dev_pool(voc):
+def load_dev_pool(voc, n_rot=5):
+    """每题生成 n_rot 个提示变体（5-shot 样例块轮转排列）——同金标、异提示，
+    池容量 ×n_rot（零泄漏零伪造：样例均来自 dev 自身）。"""
     files = sorted(glob.glob(os.path.join(CEVAL, '*_dev.parquet')))
     pool = []
     for f in files:
         dev = pd.read_parquet(f)
-        shots = ''.join(fmt_row(r, True) for _, r in dev.iterrows())
-        for _, r in dev.iterrows():
-            prompt = shots + fmt_row(r, False)
-            ids = voc.encode(prompt)[-1500:]
-            pool.append({'ids': ids, 'gold': r['answer']})
+        rows = list(dev.iterrows())
+        for k in range(max(1, n_rot)):
+            rot = rows[k:] + rows[:k]
+            shots = ''.join(fmt_row(r, True) for _, r in rot)
+            for _, r in rows:
+                prompt = shots + fmt_row(r, False)
+                ids = voc.encode(prompt)[-1500:]
+                pool.append({'ids': ids, 'gold': r['answer']})
     return pool
 
 
@@ -53,6 +58,12 @@ def main():
     ap.add_argument('--group', type=int, default=6)
     ap.add_argument('--lr', type=float, default=1e-5)
     ap.add_argument('--temp', type=float, default=1.0)
+    ap.add_argument('--init', default=r'F:\OpenASH2605\sft_v53f1\model.pt',
+                    help='RL 起始检查点（续训时传 grpo ckpt）')
+    ap.add_argument('--ref', default=r'F:\OpenASH2605\sft_v53f1\model.pt',
+                    help='KL 参照（冻结）')
+    ap.add_argument('--beta_kl', type=float, default=0.1)
+    ap.add_argument('--pool_rot', type=int, default=5)
     ap.add_argument('--out', default=r'F:\OpenASH2605\grpo_v53f1')
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
@@ -61,15 +72,24 @@ def main():
     ans_tok = {L: voc.encode(L)[0] for L in LETTERS}
     letter_ids = torch.tensor([ans_tok[L] for L in LETTERS], device=DEV)   # (4,)
     gold_idx = {L: i for i, L in enumerate(LETTERS)}
-    pool = load_dev_pool(voc)
-    print(f'dev pool: {len(pool)} questions | letter ids: {letter_ids.tolist()}')
+    pool = load_dev_pool(voc, n_rot=args.pool_rot)
+    print(f'dev pool: {len(pool)} prompt variants (rot={args.pool_rot}) '
+          f'| letter ids: {letter_ids.tolist()}')
 
     torch.manual_seed(2024)
     model = build(args.arch).to(DEV)
-    sd = torch.load(args.base, map_location='cpu', weights_only=True)
+    sd = torch.load(args.init, map_location='cpu', weights_only=True)
     missing, unexpected = model.load_state_dict(sd, strict=False)
     print(f'base loaded | missing={len(missing)} unexpected={len(unexpected)}')
     model.train()
+
+    # KL 参照（冻结）：RL 起始策略，防 dev 过拟合漂移
+    ref = build(args.arch).to(DEV)
+    ref.load_state_dict(torch.load(args.ref, map_location='cpu', weights_only=True),
+                        strict=False)
+    ref.eval()
+    for p in ref.parameters():
+        p.requires_grad_(False)
 
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95),
                             weight_decay=0.01)
@@ -102,7 +122,14 @@ def main():
             lp_full = torch.log_softmax(logits_g[:, -1].float(), -1)  # (G,V)
             tok_lp = lp_full.gather(-1, letter_ids[choices].unsqueeze(-1)).squeeze(-1)  # logπ(选中)
             loss_pg = -(adv * tok_lp).sum() / args.group
-            loss = loss_pg
+            # ---- KL 正则（对 RL 起始参照，防 dev 过拟合漂移）----
+            with torch.no_grad():
+                with torch.autocast('cuda', dtype=torch.bfloat16):
+                    ref_logits, _ = ref(rows)
+            ref_lp = torch.log_softmax(ref_logits[:, -1].float(), -1)[:, letter_ids]  # (G,4)
+            pol_lp = lp_full[:, letter_ids]                                           # (G,4)
+            kl = (pol_lp.exp() * (pol_lp - ref_lp)).sum(-1).mean()
+            loss = loss_pg + args.beta_kl * kl
             loss.backward()
             step_loss += loss.item()
             step_r += rewards.mean().item()
