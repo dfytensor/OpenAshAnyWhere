@@ -60,6 +60,7 @@ def load_model(key):
                     # full epoch 终局（v53r 前缀覆盖 r/r2 两代召回锚定版）
                     ('full_v53kr_40k', 'v53k'), ('full_v53e2_40k', 'v53e2'), ('full_v53d7_40k', 'v53d7'),
                     ('full_v53f1_40k', 'v53f1'), ('full_v53wr_40k', 'v53w'),
+                    ('full_v53dm_40k', 'v53dm'),
                     ('scale_v53dm_15k', 'v53dm'), ('scale_v53w_15k', 'v53w'),
                     ('full_v53w', 'v53w'), ('full_v53r', 'v53'), ('full_v53_40k', 'v53'),
                     # MEM 永久组增量隔离
@@ -164,7 +165,7 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['full_v53d7_40k', 'scale_v53dm_15k', 'scale_v53w_15k', 'full_gdn_80k_fixed']
+MODEL_KEYS = ['full_v53dm_40k', 'full_v53kr_40k', 'full_v53f1_40k', 'full_gdn_80k_fixed']
 models = {k: load_model(k) for k in MODEL_KEYS}
 wrapper_keys = {k for k in MODEL_KEYS if not hasattr(models[k], 'decoder_layers')}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]

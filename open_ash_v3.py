@@ -476,7 +476,7 @@ class MaxStateSuper(torch.nn.Module):
                 return out, (e[:, :, -1:], s_kv_new)
             return out, e[:, :, -1:]
         if qq is not None:
-            cc_perm = c.permute(0, 3, 2, 1).float()
+            cc_perm = c.permute(0, 3, 2, 1)
             if self.kv_dh > self.d_head:
                 # v5.3W: 宽键 = c 流身份(96) + 学习扩展(96)——标准分支 fp32 实现
                 #        （v47 的 concat 在独立 bf16 分支且 IMA；v50 已证标准分支宽键可训）。
@@ -561,7 +561,7 @@ class MaxStateSuper(torch.nn.Module):
                     o_p = o.permute(0, 3, 1, 2)                   # (B,kv_dh,S,H)
                     if self.kv_dh < self.d_head:
                         o_p = F.pad(o_p, (0, 0, 0, 0, 0, self.d_head - self.kv_dh))
-                out_l = out_l + self._kv_out(o_p)
+                # v5.3DM 修复: _kv_out 在 dm 分支内统一应用（此处原行曾致双重应用）
                 if self.dm_state:
                     # v5.3DM: DMDA 侧记忆——GDN 几何迷你复刻（内容寻址第二记忆）。
                     #        独立 k/q/v + 独立 delta 状态（prefill/评测路径）+ 逐头路由门。
