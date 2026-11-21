@@ -1,0 +1,32 @@
+val tokens: 200,000
+
+===== A. 上下文长度扩展 PPL =====
+[load full_v53dme_40k] arch=v53dme params=105,175,588 missing=0 unexpected=0
+[load full_v53f1_40k] arch=v53f1 params=105,808,614 missing=0 unexpected=0
+[load full_v53dm_v2_40k] arch=v53dm params=111,215,524 missing=0 unexpected=0
+     Lfull_v53dme_40kfull_v53f1_40kfull_v53dm_v2_40kfull_gdn_80k_fixed
+    64      12.83ppl      13.04ppl      12.96ppl      12.07ppl
+   128      11.05ppl      11.31ppl      11.10ppl      10.15ppl
+   256       9.92ppl      10.26ppl       9.93ppl       8.89ppl
+   384       9.50ppl       9.85ppl       9.48ppl       8.42ppl
+   512       9.33ppl       9.69ppl       9.31ppl       8.19ppl
+  1024       9.09ppl       9.46ppl       9.05ppl       7.70ppl
+Traceback (most recent call last):
+  File "/mnt/f/OpenASH2605/bench_longrange.py", line 180, in <module>
+    ce, ppl = eval_len(m, L)
+              ^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/bench_longrange.py", line 150, in eval_len
+    loss, _ = m.forward_loss(ids, tgt, fused_ce=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/f/OpenASH2605/open_ash_v3.py", line 1098, in forward_loss
+    targets.reshape(-1), self.ce_chunk)
+    ^^^^^^^^^^^^^^^^^^^
+torch.AcceleratorError: CUDA error: out of memory
+Search for `cudaErrorMemoryAllocation' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
