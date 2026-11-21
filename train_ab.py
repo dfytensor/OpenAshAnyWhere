@@ -147,6 +147,31 @@ def build(arch):
                           kv_dim=192, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
                           mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True)
+    if arch == 'v53gw':
+        # v5.3GW: KV 读出幅值旋钮 γ_kv——DMDA-2x 伪影信号的受控检验。逐层可学习标量
+        #        （init 1.0 恒等启动，+1 参数/层），其余 = v53w 逐位不动；对照 w@15k 12.65
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=192, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
+                          kv_gamma=True)
+    if arch == 'v53gw2':
+        # v5.3GW2: γ_kv init 2.0 可学习——双应用（DMDA-2x）在 w 架构上的精确等价重演。
+        #        隔离实验：w 单独受 2× KV 支路梯度能否复现 dm-2x 的 12.08？
+        #        复现→优化路径效应为真配方轴；不复现→dm 交互特有，全线闭合
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=192, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
+                          kv_gamma=True, kv_gamma_init=2.0)
     if arch == 'v53e2':
         # v5.3E2: 等规模状态比例重分配——kv256 状态全额保留，FFN 专家 4→2，
         #         104.8M 严格低于 GDN 106.3M（用户命题：只调状态比例、同规模达 GDN 水平）
@@ -235,6 +260,22 @@ def build(arch):
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
                           mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
                           pure_read=True)
+    if arch == 'v53dme':
+        # v5.3DME: 等规模 DMDA——dm_v2（111.2M）裁剪至 ≤GDN 106.3M：FFN 2048→1792（−12.5%）
+        #         + kv256→240（−6.25%，饱和律 ≥192 召回安全）；侧记忆 4×96/衰减分化/对称写入
+        #         全部不动（承重墙+制胜机制）；105.18M = GDN 98.9%，比 f1（105.8M）还小。
+        #         目标：f1 9.85 的等规模纪录正面挑战（预注册已成文）
+        return OpenASH_V3(VOC, HID, 8, 7, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=240, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=1792, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192, use_read=False,
+                          dm_state=True, kv_decay_spread=True,
+                          kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999)
     if arch == 'v53rf1':
         # v5.3RF1: ASH-F1 + 回看通道（ReadChannel，O(1) 逐字回访窗 512 + 2头×64 读注意力
         #         + 零初始化门）——人类式"有限工作记忆 + 返回去看"机制；数学 CoT 试金石。

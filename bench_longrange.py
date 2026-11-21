@@ -61,6 +61,7 @@ def load_model(key):
                     ('full_v53kr_40k', 'v53k'), ('full_v53e2_40k', 'v53e2'), ('full_v53d7_40k', 'v53d7'),
                     ('full_v53f1_40k', 'v53f1'), ('full_v53wr_40k', 'v53w'),
                     ('full_v53dm_40k', 'v53dm'), ('full_v53dm_v2_40k', 'v53dm'),
+                    ('full_v53dme_40k', 'v53dme'),
                     ('scale_v53dm_15k_v2', 'v53dm'),
                     ('scale_v53dm_15k', 'v53dm'), ('scale_v53w_15k', 'v53w'),
                     ('full_v53w', 'v53w'), ('full_v53r', 'v53'), ('full_v53_40k', 'v53'),
