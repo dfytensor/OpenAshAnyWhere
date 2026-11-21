@@ -16,13 +16,13 @@ sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 import torch
 import torch.nn.functional as F
 
-sys.path.insert(0, r'F:\OpenASH2605')
+sys.path.insert(0, r'/mnt/f/OpenASH2605')
 from open_ash_v3 import OpenASH_V3
 
 DEV = 'cuda'
-DATA = r'F:\OpenASH2605\minimind_data\pretrain_cached_1270238_384.pt'   # 与 big_* 训练同源，尾部 200k 为 held-out
-CKPTS = {'v3.0 pure': (r'F:\OpenASH2605\minimind_v30_pure\v3_minimind.pt', False),
-         'v3.1 decay': (r'F:\OpenASH2605\minimind_v31_decay\v3_minimind.pt', True)}
+DATA = r'/mnt/f/OpenASH2605/minimind_data/pretrain_cached_1270238_384.pt'   # 与 big_* 训练同源，尾部 200k 为 held-out
+CKPTS = {'v3.0 pure': (r'/mnt/f/OpenASH2605/minimind_v30_pure/v3_minimind.pt', False),
+         'v3.1 decay': (r'/mnt/f/OpenASH2605/minimind_v31_decay/v3_minimind.pt', True)}
 VOC, HID, HEADS, LAYERS = 23004, 768, 8, 12
 
 torch.manual_seed(2024)
@@ -60,7 +60,8 @@ def load_model(key):
                     # full epoch 终局（v53r 前缀覆盖 r/r2 两代召回锚定版）
                     ('full_v53kr_40k', 'v53k'), ('full_v53e2_40k', 'v53e2'), ('full_v53d7_40k', 'v53d7'),
                     ('full_v53f1_40k', 'v53f1'), ('full_v53wr_40k', 'v53w'),
-                    ('full_v53dm_40k', 'v53dm'),
+                    ('full_v53dm_40k', 'v53dm'), ('full_v53dm_v2_40k', 'v53dm'),
+                    ('scale_v53dm_15k_v2', 'v53dm'),
                     ('scale_v53dm_15k', 'v53dm'), ('scale_v53w_15k', 'v53w'),
                     ('full_v53w', 'v53w'), ('full_v53r', 'v53'), ('full_v53_40k', 'v53'),
                     # MEM 永久组增量隔离
@@ -165,7 +166,7 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['full_v53dm_40k', 'full_v53kr_40k', 'full_v53f1_40k', 'full_gdn_80k_fixed']
+MODEL_KEYS = ['full_v53dm_v2_40k', 'full_v53kr_40k', 'full_v53f1_40k', 'full_v53d7_40k', 'full_gdn_80k_fixed']
 models = {k: load_model(k) for k in MODEL_KEYS}
 wrapper_keys = {k for k in MODEL_KEYS if not hasattr(models[k], 'decoder_layers')}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]
@@ -273,6 +274,6 @@ for k in [key for key in MODEL_KEYS if key not in wrapper_keys]:
                   f'q10/50/90={gq[0]:.3f}/{gq[1]:.3f}/{gq[2]:.3f}  半衰期≈{hor:7.1f} tok')
     results['D_gamma'][k] = horizons
 
-with open(r'F:\OpenASH2605\longrange_results.json', 'w', encoding='utf-8') as f:
+with open(r'/mnt/f/OpenASH2605/longrange_results.json', 'w', encoding='utf-8') as f:
     json.dump(results, f, ensure_ascii=False, indent=1)
 print('\n结果已存 longrange_results.json')
