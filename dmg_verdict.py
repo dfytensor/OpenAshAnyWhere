@@ -7,20 +7,23 @@ sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 r = json.load(open(r'F:\OpenASH2605\longrange_results.json', encoding='utf-8'))
 ks = list(r['A_len_ppl'].keys())
 short = {'full_v53dmg_40k': 'dmg@40k(105.18M)', 'full_v53dme_40k': 'dme@40k(105.18M)',
-         'full_v53dm_v2_40k': 'dm_v2@40k(111.2M)', 'full_gdn_80k_fixed': 'GDN(106.3M)'}
+         'full_v53dm_v2_40k': 'dm_v2@40k(111.2M)', 'full_gdn_80k_fixed': 'GDN(106.3M)',
+         'full_v53dme_80k': 'dme@80k(105.18M)'}
 print('=== A: ppl by length ===')
 print('L'.rjust(6) + ''.join(short[k].rjust(20) for k in ks))
 for i, L in enumerate((64, 128, 256, 384, 512, 1024, 2048)):
     print(str(L).rjust(6) + ''.join(('%.2f' % r['A_len_ppl'][k][i][2]).rjust(20) for k in ks))
 print()
-dmg = r['A_len_ppl']['full_v53dmg_40k']
+dmg = r['A_len_ppl']['full_v53dme_80k']
 dme = r['A_len_ppl']['full_v53dme_40k']
 gdn = r['A_len_ppl']['full_gdn_80k_fixed']
 print('=== 预注册判据 ===')
-print('主判据 dmg@384 = %.2f vs dme 9.50: %s' % (
-    dmg[3][2], '先验有效' if dmg[3][2] < 9.50 else '训练覆写先验 → 衰减线关闭'))
+print('科学判据 dme@80k @384 = %.2f vs dme@40k 9.50: %s' % (
+    dmg[3][2], '斜率延续' if dmg[3][2] < 9.50 else '饱和'))
+print('对 GDN: %.2f vs 8.42: %s' % (
+    dmg[3][2], '< 8.42 → 星标越过(2x tokens)' if dmg[3][2] < 8.42 else 'GDN 守住'))
 for i, L in enumerate((64, 128, 256, 384, 512, 1024, 2048)):
-    print('  L%-5d dmg/dme %+.1f%% | dmg/GDN %+.1f%%' % (
+    print('  L%-5d 80k/40k %+.1f%% | 80k/GDN %+.1f%%' % (
         L, (dmg[i][2] / dme[i][2] - 1) * 100, (dmg[i][2] / gdn[i][2] - 1) * 100))
 print()
 b = r['B_recall']
