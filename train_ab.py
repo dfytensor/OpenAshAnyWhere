@@ -276,6 +276,21 @@ def build(arch):
                           kv_beta_tok=True, em_factor_r=192, use_read=False,
                           dm_state=True, kv_decay_spread=True,
                           kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999)
+    if arch == 'v53dmep':
+        # v5.3DMEP: dme + 位置条件化递推调制——E1 动态权重的 e_t 轴移植：β/衰减逐位置
+        #         查表偏移（零初始化恒等启动，+32K 参数/层，零 FLOPs）；等规模内 105.41M
+        return OpenASH_V3(VOC, HID, 8, 7, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=240, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=1792, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192, use_read=False,
+                          dm_state=True, kv_decay_spread=True,
+                          kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999,
+                          pos_mod=True)
     if arch == 'v53rf1':
         # v5.3RF1: ASH-F1 + 回看通道（ReadChannel，O(1) 逐字回访窗 512 + 2头×64 读注意力
         #         + 零初始化门）——人类式"有限工作记忆 + 返回去看"机制；数学 CoT 试金石。

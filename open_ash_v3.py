@@ -112,7 +112,9 @@ class MaxStateSuper(torch.nn.Module):
                  gdn_core=False, k_extra=32, mem_force=False, asym_delta=False, mem_extra=False,
                  kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False, pure_read=False,
                  kv_ogate=False, kv_v_dim=None, dm_state=False, kv_decay_spread=False,
-                 kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999):
+                 kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999, kv_gamma=False,
+                 kv_gamma_init=1.0,
+                 pos_mod=False):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -248,6 +250,18 @@ class MaxStateSuper(torch.nn.Module):
                                           bias=False)
                     self.dm_route = nn.Parameter(torch.zeros(self.heads))  # 逐头路由门
                     self.dm_norm_g = nn.Parameter(torch.ones(self.dm_dim))
+                # v5.3GW: KV 读出幅值旋钮（γ_kv，逐层可学习标量 init 1.0 = 恒等启动）——
+                #        DMDA-2x 伪影信号的受控检验：若训练自主漂向 ~2× 则振幅偏好坐实，
+                #        若停在 1.0 则 2x 伪影收益非幅度机制。每层 +1 参数。
+                self.kv_gamma_on = kv_gamma
+                self.kv_gamma = nn.Parameter(torch.full((1,), kv_gamma_init)) if kv_gamma else None
+                # v5.3DMEP: 位置条件化递推调制——E1 动态权重机制的 e_t 轴移植。
+                #        循环算子（β 写入强度 / g 衰减）逐位置查表偏移（零初始化=恒等启动）；
+        #        与 v53g（内容条件衰减，失败）正交：这里是步身份条件。每层 2×2048×8。
+                self.pos_mod = pos_mod
+                if pos_mod:
+                    self.beta_pos_table = nn.Parameter(torch.zeros(2048, heads))
+                    self.decay_pos_table = nn.Parameter(torch.zeros(2048, heads))
                 # v5.3G: 输入调制衰减（GDN 的 a_proj/dt_bias 语义隔离）——静态逐头衰减改为
                 #        g_t = -exp(kv_loga)·softplus(a_proj(x_t)+dt_bias)；a_proj 零初始化 +
                 #        dt_bias=softplus⁻¹(1) → 起点等价当前静态衰减，训练中学习逐 token 调制
@@ -321,6 +335,13 @@ class MaxStateSuper(torch.nn.Module):
             rms = o_p.float().pow(2).mean(dim=3, keepdim=True).add_(1e-6).rsqrt().to(o_p.dtype)
             return self.kv_out_gate.view(1, -1, 1, 1).to(o_p.dtype) * o_p * rms
         return self.kv_gate * o_p
+
+    def _kv_out_scaled(self, o_p):
+        """v5.3GW: KV 读出 × 逐层可学习幅值 γ_kv（关闭时逐位等价 _kv_out）"""
+        o = self._kv_out(o_p)
+        if self.kv_gamma_on:
+            return self.kv_gamma.to(o.dtype) * o
+        return o
 
     def forward(self, x, ids, state=None):
         b, s, d = x.shape
@@ -511,11 +532,21 @@ class MaxStateSuper(torch.nn.Module):
                 else:
                     vv_f = kk_f.float()                      # delta 写入 v = k（旧约定）
                 g_f = log_a.permute(0, 2, 1).float()         # (B,S,H) log 域衰减
+                if getattr(self, 'pos_mod', False):
+                    pos_idx = torch.arange(sx, device=x.device)
+                    g_f = g_f + self.decay_pos_table[pos_idx].float()[None]
                 if getattr(self, 'kv_beta_tok', False):
                     # v3.8: per-token β（fp32 einsum，kk_f 已归一化）
-                    beta_f = torch.sigmoid(
-                        torch.einsum('bshd,hd->bsh', kk_f, self.kv_beta_w.float())
-                        + self.kv_beta_b.view(1, 1, -1).float())
+                    if getattr(self, 'pos_mod', False):
+                        pos_idx = torch.arange(sx, device=kk_f.device)
+                        beta_f = torch.sigmoid(
+                            torch.einsum('bshd,hd->bsh', kk_f, self.kv_beta_w.float())
+                            + self.kv_beta_b.view(1, 1, -1).float()
+                            + self.beta_pos_table[pos_idx].float()[None])
+                    else:
+                        beta_f = torch.sigmoid(
+                            torch.einsum('bshd,hd->bsh', kk_f, self.kv_beta_w.float())
+                            + self.kv_beta_b.view(1, 1, -1).float())
                 else:
                     beta_f = torch.sigmoid(self.kv_beta_fla).view(1, 1, -1)\
                         .expand(bx, sx, self.heads).to(qq_f.dtype)
@@ -585,9 +616,9 @@ class MaxStateSuper(torch.nn.Module):
                     d_route = torch.sigmoid(self.dm_route).view(1, 1, -1, 1).to(d_out.dtype)
                     d_out = d_out * d_route
                     o_p = o_p + d_out.permute(0, 3, 1, 2).to(o_p.dtype)
-                    out_l = out_l + self._kv_out(o_p)
+                    out_l = out_l + self._kv_out_scaled(o_p)
                 else:
-                    out_l = out_l + self._kv_out(o_p)
+                    out_l = out_l + self._kv_out_scaled(o_p)
             elif s_kv is not None and sx == 1 and self.kv_backend in ('delta_fla', 'delta_chunk'):
                 # 增量单步（O(1) 解码，delta 写入，纯 torch fp32 精确）：
                 #   S ← a·S + β·k̂⊗(k̂ − β·(k̂S))；r = q·S·K^−0.5
@@ -824,7 +855,8 @@ class DecoderLayer(torch.nn.Module):
                  mem_force=False, asym_delta=False, mem_extra=False, kv_value_proj=False,
                  kv_q_l2norm=False, kv_decay_mod=False, moe_experts=4, pure_read=False,
                  kv_ogate=False, kv_v_dim=None, use_read=False, dm_state=False,
-                 kv_decay_spread=False, kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999):
+                 kv_decay_spread=False, kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999,
+                 kv_gamma=False, kv_gamma_init=1.0, pos_mod=False):
         super(DecoderLayer, self).__init__()
         self.read = ReadChannel(hidden_size) if use_read else None
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
@@ -847,7 +879,8 @@ class DecoderLayer(torch.nn.Module):
                                                     dm_state=dm_state,
                                                     kv_decay_spread=kv_decay_spread,
                                                     kv_decay_spread_lo=kv_decay_spread_lo,
-                                                    kv_decay_spread_hi=kv_decay_spread_hi)
+                                                    kv_decay_spread_hi=kv_decay_spread_hi,
+                                                    kv_gamma=kv_gamma, kv_gamma_init=kv_gamma_init, pos_mod=pos_mod)
         if em_ref is not None:
             # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
             fh = ffn_hidden or hidden_size
@@ -994,7 +1027,8 @@ class OpenASH_V3(torch.nn.Module):
                  kv_value_proj=False, kv_q_l2norm=False, kv_decay_mod=False, moe_experts=4,
                  em_factor_r=None, pure_read=False, kv_ogate=False, kv_v_dim=None, use_read=False,
                  dm_state=False, kv_decay_spread=False, kv_decay_spread_lo=0.90,
-                 kv_decay_spread_hi=0.999):
+                 kv_decay_spread_hi=0.999, kv_gamma=False,
+                 kv_gamma_init=1.0, pos_mod=False):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -1030,7 +1064,10 @@ class OpenASH_V3(torch.nn.Module):
                           kv_ogate=kv_ogate, kv_v_dim=kv_v_dim, use_read=use_read,
                           dm_state=dm_state, kv_decay_spread=kv_decay_spread,
                           kv_decay_spread_lo=kv_decay_spread_lo,
-                          kv_decay_spread_hi=kv_decay_spread_hi)
+                          kv_decay_spread_hi=kv_decay_spread_hi,
+                          kv_gamma=kv_gamma,
+                          kv_gamma_init=kv_gamma_init,
+                          pos_mod=pos_mod)
              for _ in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights

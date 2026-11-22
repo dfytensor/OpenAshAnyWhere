@@ -1,0 +1,5 @@
+[v53dmep] params: 105,404,964
+[v53dmep] step     1 | loss 10.204 | lr 6.00e-07 | 5583 ms/step
+[v53dmep] step   100 | loss 7.769 | lr 6.00e-05 | 447 ms/step
+[v53dmep] step   200 | loss 5.689 | lr 1.20e-04 | 422 ms/step
+[v53dmep] step   300 | loss 4.943 | lr 1.80e-04 | 414 ms/step
