@@ -114,7 +114,8 @@ class MaxStateSuper(torch.nn.Module):
                  kv_ogate=False, kv_v_dim=None, dm_state=False, kv_decay_spread=False,
                  kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999, kv_gamma=False,
                  kv_gamma_init=1.0,
-                 pos_mod=False):
+                 pos_mod=False, layer_idx=0, num_layers=1,
+                 kv_decay_grad=False):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -198,6 +199,14 @@ class MaxStateSuper(torch.nn.Module):
                 g_lo = -math.log(kv_decay_spread_lo)
                 self.kv_loga = nn.Parameter(
                     torch.log(torch.expm1(torch.linspace(g_hi, g_lo, heads))))
+            if kv_decay_grad:
+                # v5.3DMG: 深度分级衰减先验——GDN 40k 实测配方（L0 1.4tok → L4 16.1tok 的
+                #        深度梯度；我方全层平坦 3.7tok 是利用曲线/2048 差距的主嫌）。
+                #        半衰期逐层几何爬升 1.5→12 tok，头上再乘相对散布；零参数零 FLOPs
+                hl = 1.5 * (12.0 / 1.5) ** (layer_idx / max(1, num_layers - 1))
+                g_center = math.log(2.0) / hl
+                fac = torch.linspace(0.5, 2.5, heads)
+                self.kv_loga = nn.Parameter(torch.log(torch.expm1(g_center * fac)))
             else:
                 self.kv_loga = nn.Parameter(torch.full((heads,), theta0))
             self.kv_gate = nn.Parameter(torch.tensor(0.0))
@@ -856,7 +865,8 @@ class DecoderLayer(torch.nn.Module):
                  kv_q_l2norm=False, kv_decay_mod=False, moe_experts=4, pure_read=False,
                  kv_ogate=False, kv_v_dim=None, use_read=False, dm_state=False,
                  kv_decay_spread=False, kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999,
-                 kv_gamma=False, kv_gamma_init=1.0, pos_mod=False):
+                 kv_gamma=False, kv_gamma_init=1.0, pos_mod=False, layer_idx=0, num_layers=1,
+                 kv_decay_grad=False):
         super(DecoderLayer, self).__init__()
         self.read = ReadChannel(hidden_size) if use_read else None
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
@@ -880,7 +890,10 @@ class DecoderLayer(torch.nn.Module):
                                                     kv_decay_spread=kv_decay_spread,
                                                     kv_decay_spread_lo=kv_decay_spread_lo,
                                                     kv_decay_spread_hi=kv_decay_spread_hi,
-                                                    kv_gamma=kv_gamma, kv_gamma_init=kv_gamma_init, pos_mod=pos_mod)
+                                                    kv_gamma=kv_gamma, kv_gamma_init=kv_gamma_init, pos_mod=pos_mod,
+                                                    layer_idx=layer_idx,
+                                                    num_layers=num_layers,
+                                                    kv_decay_grad=kv_decay_grad)
         if em_ref is not None:
             # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
             fh = ffn_hidden or hidden_size
@@ -1028,7 +1041,7 @@ class OpenASH_V3(torch.nn.Module):
                  em_factor_r=None, pure_read=False, kv_ogate=False, kv_v_dim=None, use_read=False,
                  dm_state=False, kv_decay_spread=False, kv_decay_spread_lo=0.90,
                  kv_decay_spread_hi=0.999, kv_gamma=False,
-                 kv_gamma_init=1.0, pos_mod=False):
+                 kv_gamma_init=1.0, pos_mod=False, kv_decay_grad=False):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -1067,8 +1080,10 @@ class OpenASH_V3(torch.nn.Module):
                           kv_decay_spread_hi=kv_decay_spread_hi,
                           kv_gamma=kv_gamma,
                           kv_gamma_init=kv_gamma_init,
-                          pos_mod=pos_mod)
-             for _ in range(num_layers)])
+                          pos_mod=pos_mod,
+                          layer_idx=i, num_layers=num_layers,
+                          kv_decay_grad=kv_decay_grad)
+             for i in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights
         self.tied_head = tied_head
