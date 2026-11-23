@@ -589,12 +589,14 @@ def main():
     ap.add_argument('--eval_every', type=int, default=2000)
     ap.add_argument('--anchor_lambda', type=float, default=0.0,
                     help='召回锚定：kv_beta_w/o_mix 向初值的相对 L2 惩罚系数（0=关闭）')
+    ap.add_argument('--seq_len', type=int, default=384,
+                    help='训练窗长（v5.3 长窗协议：384→1024，同 token 预算下 bs 等比缩减）')
     args = ap.parse_args()
     arch = args.arch
     os.makedirs(args.out, exist_ok=True)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
-    L = 384
+    L = args.seq_len
 
     torch.manual_seed(2024)
     raw = torch.load(args.data, map_location='cpu', weights_only=True)
