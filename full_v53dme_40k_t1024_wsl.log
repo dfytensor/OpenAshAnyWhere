@@ -1,0 +1,15 @@
+[v53dme] params: 105,175,588
+[anchor] recall anchor on 14 tensors, lambda=3e-06
+/mnt/f/OpenASH2605/train_ab.py:686: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  'anchor': float(anchor_loss()),
+[v53dme] step     1 | loss 10.197 | lr 3.75e-07 | 11036 ms/step
+[v53dme] step   100 | loss 8.713 | lr 3.75e-05 | 530 ms/step
+[v53dme] step   200 | loss 5.883 | lr 7.50e-05 | 475 ms/step
+[v53dme] step   300 | loss 5.251 | lr 1.12e-04 | 457 ms/step
+[v53dme] step   400 | loss 4.816 | lr 1.50e-04 | 448 ms/step
+[v53dme] step   500 | loss 4.380 | lr 1.88e-04 | 443 ms/step
+[v53dme] step   600 | loss 4.612 | lr 2.25e-04 | 439 ms/step
+[v53dme] step   700 | loss 4.170 | lr 2.62e-04 | 436 ms/step
+[v53dme] step   800 | loss 4.365 | lr 3.00e-04 | 434 ms/step
+[v53dme] step   900 | loss 3.869 | lr 3.00e-04 | 433 ms/step

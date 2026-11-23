@@ -115,7 +115,7 @@ class MaxStateSuper(torch.nn.Module):
                  kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999, kv_gamma=False,
                  kv_gamma_init=1.0,
                  pos_mod=False, layer_idx=0, num_layers=1,
-                 kv_decay_grad=False):
+                 kv_decay_grad=False, dm_gate=False):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -259,6 +259,17 @@ class MaxStateSuper(torch.nn.Module):
                                           bias=False)
                     self.dm_route = nn.Parameter(torch.zeros(self.heads))  # 逐头路由门
                     self.dm_norm_g = nn.Parameter(torch.ones(self.dm_dim))
+                    # v5.3DMS: 侧记忆门控——GDN 式输入调制衰减 g = -exp(A_log)·softplus(a_proj(x)+dt_bias)。
+                    #        侧记忆本就是 GDN 几何却无衰减（纯 delta 永不遗忘→长程外推失败的贡献者）；
+                    #        给它 GDN 的外推机制。a_proj 零初始化→起点=静态逐头衰减；头间半衰期散布
+                    self.dm_gate = dm_gate
+                    if dm_gate:
+                        gam = torch.tensor([0.99, 0.997, 0.9995, 0.99995])[:self.dm_heads]
+                        self.dm_A_log = nn.Parameter(torch.log(-torch.log(gam)))
+                        self.dm_dt_bias = nn.Parameter(torch.full((self.dm_heads,), 0.5413))
+                        self.dm_a_proj = nn.Linear(dim_size, self.dm_heads, bias=False)
+                        with torch.no_grad():
+                            self.dm_a_proj.weight.zero_()
                 # v5.3GW: KV 读出幅值旋钮（γ_kv，逐层可学习标量 init 1.0 = 恒等启动）——
                 #        DMDA-2x 伪影信号的受控检验：若训练自主漂向 ~2× 则振幅偏好坐实，
                 #        若停在 1.0 则 2x 伪影收益非幅度机制。每层 +1 参数。
@@ -616,9 +627,18 @@ class MaxStateSuper(torch.nn.Module):
                                        + torch.einsum('bsd,hd->bsh', x.float(),
                                                       self.dm_beta_w.float())
                                       ).to(torch.bfloat16)
-                    d_o, _ = chunk_delta_rule(
-                        q=d_q, k=d_k, v=d_v, beta=db,
-                        initial_state=None, output_final_state=False)
+                    if self.dm_gate:
+                        # v5.3DMS: GDN 式门控 delta（输入调制衰减）
+                        d_g = (-torch.exp(self.dm_A_log.float()).view(1, 1, -1)
+                               * torch.nn.functional.softplus(self.dm_a_proj(x).float()
+                                                              + self.dm_dt_bias.float().view(1, 1, -1)))
+                        d_o, _ = chunk_gated_delta_rule(
+                            q=d_q, k=d_k, v=d_v, g=d_g.to(torch.bfloat16), beta=db,
+                            initial_state=None, output_final_state=False)
+                    else:
+                        d_o, _ = chunk_delta_rule(
+                            q=d_q, k=d_k, v=d_v, beta=db,
+                            initial_state=None, output_final_state=False)
                     d_o = d_o.float() * self.dm_norm_g.to(d_o.dtype).view(1, 1, 1, -1)
                     d_flat = d_o.reshape(bx, sx, self.dm_heads * self.dm_dim)
                     d_out = self.dm_o(d_flat).view(bx, sx, self.heads, self.d_head)
@@ -866,7 +886,7 @@ class DecoderLayer(torch.nn.Module):
                  kv_ogate=False, kv_v_dim=None, use_read=False, dm_state=False,
                  kv_decay_spread=False, kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999,
                  kv_gamma=False, kv_gamma_init=1.0, pos_mod=False, layer_idx=0, num_layers=1,
-                 kv_decay_grad=False):
+                 kv_decay_grad=False, dm_gate=False):
         super(DecoderLayer, self).__init__()
         self.read = ReadChannel(hidden_size) if use_read else None
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
@@ -893,7 +913,8 @@ class DecoderLayer(torch.nn.Module):
                                                     kv_gamma=kv_gamma, kv_gamma_init=kv_gamma_init, pos_mod=pos_mod,
                                                     layer_idx=layer_idx,
                                                     num_layers=num_layers,
-                                                    kv_decay_grad=kv_decay_grad)
+                                                    kv_decay_grad=kv_decay_grad,
+                                                    dm_gate=dm_gate)
         if em_ref is not None:
             # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
             fh = ffn_hidden or hidden_size
@@ -1041,7 +1062,8 @@ class OpenASH_V3(torch.nn.Module):
                  em_factor_r=None, pure_read=False, kv_ogate=False, kv_v_dim=None, use_read=False,
                  dm_state=False, kv_decay_spread=False, kv_decay_spread_lo=0.90,
                  kv_decay_spread_hi=0.999, kv_gamma=False,
-                 kv_gamma_init=1.0, pos_mod=False, kv_decay_grad=False):
+                 kv_gamma_init=1.0, pos_mod=False, kv_decay_grad=False,
+                 dm_gate=False):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -1082,7 +1104,8 @@ class OpenASH_V3(torch.nn.Module):
                           kv_gamma_init=kv_gamma_init,
                           pos_mod=pos_mod,
                           layer_idx=i, num_layers=num_layers,
-                          kv_decay_grad=kv_decay_grad)
+                          kv_decay_grad=kv_decay_grad,
+                          dm_gate=dm_gate)
              for i in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights

@@ -306,6 +306,22 @@ def build(arch):
                           dm_state=True, kv_decay_spread=True,
                           kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999,
                           kv_decay_grad=True)
+    if arch == 'v53dms':
+        # v5.3DMS: dme + 侧记忆门控 delta（GDN 式输入调制衰减）——长程外推失败的架构正解：
+        #        侧记忆本就是 GDN 几何却无衰减；给它 GDN 的外推机制。头间半衰期散布
+        #        69/231/1386/13863 tok，a_proj 零初始化（起点=静态衰减）；+21.6K 参数等规模内
+        return OpenASH_V3(VOC, HID, 8, 7, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=240, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=1792, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192, use_read=False,
+                          dm_state=True, kv_decay_spread=True,
+                          kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999,
+                          dm_gate=True)
     if arch == 'v53rf1':
         # v5.3RF1: ASH-F1 + 回看通道（ReadChannel，O(1) 逐字回访窗 512 + 2头×64 读注意力
         #         + 零初始化门）——人类式"有限工作记忆 + 返回去看"机制；数学 CoT 试金石。
