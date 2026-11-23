@@ -61,7 +61,7 @@ def evaluate(bs=32):
     stride = max(1, val_win.shape[0] // n_win)
     tot, cnt = 0.0, 0
     for s in range(0, n_win, bs):
-        idx = (torch.arange(0, n_win, device=DEV) * stride)[s:s + bs]
+        idx = (torch.arange(0, n_win) * stride)[s:s + bs]
         win = val_win[idx].cuda()
         with torch.autocast('cuda', dtype=torch.bfloat16):
             loss, _ = model.forward_loss(win[:, :-1], win[:, 1:], fused_ce=True)

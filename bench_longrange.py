@@ -61,7 +61,7 @@ def load_model(key):
                     ('full_v53kr_40k', 'v53k'), ('full_v53e2_40k', 'v53e2'), ('full_v53d7_40k', 'v53d7'),
                     ('full_v53f1_40k', 'v53f1'), ('full_v53wr_40k', 'v53w'),
                     ('full_v53dm_40k', 'v53dm'), ('full_v53dm_v2_40k', 'v53dm'),
-                    ('full_v53dme_40k', 'v53dme'), ('full_v53dmg_40k', 'v53dmg'),
+                    ('full_v53dme_80k', 'v53dme'), ('full_v53dmg_40k', 'v53dmg'),
                     ('full_v53dme_80k', 'v53dme'),
                     ('scale_v53dmep_15k', 'v53dmep'),
                     ('scale_v53dm_15k_v2', 'v53dm'),
@@ -169,7 +169,7 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['full_v53dme_80k', 'full_v53dme_40k', 'full_v53dm_v2_40k', 'full_gdn_80k_fixed']
+MODEL_KEYS = ['full_v53dme_80k', 'full_gdn_160k', 'full_gdn_80k_fixed', 'full_v53dm_v2_40k']
 models = {k: load_model(k) for k in MODEL_KEYS}
 wrapper_keys = {k for k in MODEL_KEYS if not hasattr(models[k], 'decoder_layers')}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]
