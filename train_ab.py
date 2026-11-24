@@ -636,7 +636,11 @@ def main():
 
     n_win_eval = 256
     @torch.no_grad()
-    def evaluate(bs=32):
+    def evaluate(bs=None):
+        # v5.3 长窗协议修复：评估批必须随窗长等比缩放（原硬编码 bs=32 在 T=1024 时是训练批的
+        #   2.7 倍，每次评估把显存顶到天花板 → 分配器碎片化重试风暴，436ms→6129ms/step 渐进崩溃）
+        if bs is None:
+            bs = max(2, (32 * 384) // L)
         model.eval()
         n_win = min(256, val_win.shape[0])
         stride = max(1, val_win.shape[0] // n_win)
@@ -650,6 +654,7 @@ def main():
             tot += loss.item() * win[:, :-1].numel()
             cnt += win[:, :-1].numel()
         model.train()
+        torch.cuda.empty_cache()
         return tot / cnt
 
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.01)
