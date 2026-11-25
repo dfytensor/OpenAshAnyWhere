@@ -263,7 +263,14 @@ class MaxStateSuper(torch.nn.Module):
                     #        侧记忆本就是 GDN 几何却无衰减（纯 delta 永不遗忘→长程外推失败的贡献者）；
                     #        给它 GDN 的外推机制。a_proj 零初始化→起点=静态逐头衰减；头间半衰期散布
                     self.dm_gate = dm_gate
+                    # v5.3DMH: dm_gate 可为 bool（全门控）或 int（前 n 个头门控，其余永久纯 delta）
+                    #        ——门控头管外推、永久头管召回的混合侧记忆；掩码非持久化
                     if dm_gate:
+                        n_g = self.dm_heads if isinstance(dm_gate, bool) else int(dm_gate)
+                        self.dm_n_gated = max(0, min(self.dm_heads, n_g))
+                        self.register_buffer('dm_gmask', torch.tensor(
+                            [1.0] * self.dm_n_gated + [0.0] * (self.dm_heads - self.dm_n_gated)),
+                            persistent=False)
                         gam = torch.tensor([0.99, 0.997, 0.9995, 0.99995])[:self.dm_heads]
                         self.dm_A_log = nn.Parameter(torch.log(-torch.log(gam)))
                         self.dm_dt_bias = nn.Parameter(torch.full((self.dm_heads,), 0.5413))
@@ -632,6 +639,7 @@ class MaxStateSuper(torch.nn.Module):
                         d_g = (-torch.exp(self.dm_A_log.float()).view(1, 1, -1)
                                * torch.nn.functional.softplus(self.dm_a_proj(x).float()
                                                               + self.dm_dt_bias.float().view(1, 1, -1)))
+                        d_g = d_g * self.dm_gmask.view(1, 1, -1)
                         d_o, _ = chunk_gated_delta_rule(
                             q=d_q, k=d_k, v=d_v, g=d_g.to(torch.bfloat16), beta=db,
                             initial_state=None, output_final_state=False)
