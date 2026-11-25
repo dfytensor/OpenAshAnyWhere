@@ -622,6 +622,8 @@ def main():
                     help='召回锚定：kv_beta_w/o_mix 向初值的相对 L2 惩罚系数（0=关闭）')
     ap.add_argument('--seq_len', type=int, default=384,
                     help='训练窗长（v5.3 长窗协议：384→1024，同 token 预算下 bs 等比缩减）')
+    ap.add_argument('--accum', type=int, default=1,
+                    help='梯度累积微批数（等效 batch = batch_size × accum；优化步数/调度/Token 量不变）')
     args = ap.parse_args()
     arch = args.arch
     os.makedirs(args.out, exist_ok=True)
@@ -708,13 +710,16 @@ def main():
         lr = lr_at(step)
         for gp in opt.param_groups:
             gp['lr'] = lr
-        batch = next(it)
-        with torch.autocast('cuda', dtype=torch.bfloat16):
-            loss, _ = model.forward_loss(batch[:, :-1], batch[:, 1:], fused_ce=True)
-        if anchored:
-            loss = loss + anchor_loss()
         opt.zero_grad()
-        loss.backward()
+        # v5.3: 梯度累积（--accum N：batch_size × N = 等效 batch，优化步数/LR 调度/Token 量均不变；
+        #   宿主 GPU 争用时的显存对策。accum=1 时与原循环逐位等价）
+        for _mi in range(args.accum):
+            batch = next(it)
+            with torch.autocast('cuda', dtype=torch.bfloat16):
+                loss, _ = model.forward_loss(batch[:, :-1], batch[:, 1:], fused_ce=True)
+            if anchored:
+                loss = loss + anchor_loss()
+            (loss / args.accum).backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
         if step % 100 == 0 or step == 1:
