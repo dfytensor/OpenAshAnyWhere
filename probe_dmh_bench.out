@@ -1,0 +1,53 @@
+val tokens: 200,000
+
+===== A. 上下文长度扩展 PPL =====
+[load full_v53dmh_40k] arch=v53dmh params=105,197,148 missing=0 unexpected=0
+[load full_v53dme_40k] arch=v53dme params=105,175,588 missing=0 unexpected=0
+[load full_v53dms_40k] arch=v53dms params=105,197,148 missing=0 unexpected=0
+     Lfull_v53dmh_40kfull_v53dme_40kfull_v53dms_40kfull_gdn_80k_fixed
+    64      12.52ppl      12.83ppl      12.64ppl      12.07ppl
+   128      10.82ppl      11.05ppl      10.91ppl      10.15ppl
+   256       9.73ppl       9.92ppl       9.79ppl       8.89ppl
+   384       9.31ppl       9.50ppl       9.37ppl       8.42ppl
+   512       9.15ppl       9.33ppl       9.17ppl       8.19ppl
+  1024       8.82ppl       9.09ppl       8.82ppl       7.70ppl
+  2048       8.86ppl       9.32ppl       8.72ppl       7.53ppl
+（>512 为长度外推区：位置编码 clamp(511) 饱和，测 scan 状态本身的保持能力）
+
+===== B. 远程复制召回（重复 span CE 下降 = 召回强度） =====
+gap=  32  full_v53dmh_40k: rep  2.65 / fresh  3.80 → gain +1.15  full_v53dme_40k: rep  2.65 / fresh  3.77 → gain +1.12  full_v53dms_40k: rep  2.70 / fresh  3.79 → gain +1.09  full_gdn_80k_fixed: rep  2.34 / fresh  3.68 → gain +1.34
+gap=  64  full_v53dmh_40k: rep  2.77 / fresh  3.86 → gain +1.09  full_v53dme_40k: rep  2.75 / fresh  3.86 → gain +1.11  full_v53dms_40k: rep  2.85 / fresh  3.88 → gain +1.02  full_gdn_80k_fixed: rep  2.44 / fresh  3.76 → gain +1.32
+gap= 128  full_v53dmh_40k: rep  3.19 / fresh  3.86 → gain +0.67  full_v53dme_40k: rep  3.09 / fresh  3.83 → gain +0.73  full_v53dms_40k: rep  3.25 / fresh  3.84 → gain +0.59  full_gdn_80k_fixed: rep  2.95 / fresh  3.69 → gain +0.75
+gap= 256  full_v53dmh_40k: rep  3.56 / fresh  3.97 → gain +0.40  full_v53dme_40k: rep  3.46 / fresh  3.96 → gain +0.50  full_v53dms_40k: rep  3.69 / fresh  3.98 → gain +0.29  full_gdn_80k_fixed: rep  3.43 / fresh  3.81 → gain +0.38
+gap= 384  full_v53dmh_40k: rep  3.72 / fresh  3.81 → gain +0.09  full_v53dme_40k: rep  3.63 / fresh  3.86 → gain +0.22  full_v53dms_40k: rep  3.86 / fresh  3.82 → gain -0.05  full_gdn_80k_fixed: rep  3.72 / fresh  3.69 → gain -0.03
+
+===== C. 分位置 loss（L=384，8 桶）—— 上下文利用曲线 =====
+full_v53dmh_40k:  2.56  2.28  2.25  2.19  2.20  2.13  2.10  2.16
+full_v53dme_40k:  2.57  2.31  2.27  2.21  2.22  2.16  2.12  2.18
+full_v53dms_40k:  2.56  2.28  2.26  2.20  2.21  2.14  2.10  2.16
+full_gdn_80k_fixed:  2.52  2.22  2.16  2.10  2.09  2.00  1.95  2.01
+
+===== D. γ 有效记忆长度（真实语料统计） =====
+  full_v53dmh_40k layer  0: gamma_mean=0.8082  q10/50/90=0.701/0.790/0.946  半衰期≈    3.3 tok
+  full_v53dmh_40k layer  1: gamma_mean=0.8216  q10/50/90=0.706/0.814/0.954  半衰期≈    3.5 tok
+  full_v53dmh_40k layer  2: gamma_mean=0.8312  q10/50/90=0.722/0.825/0.955  半衰期≈    3.7 tok
+  full_v53dmh_40k layer  3: gamma_mean=0.8315  q10/50/90=0.720/0.823/0.957  半衰期≈    3.8 tok
+  full_v53dmh_40k layer  4: gamma_mean=0.8299  q10/50/90=0.720/0.821/0.955  半衰期≈    3.7 tok
+  full_v53dmh_40k layer  5: gamma_mean=0.8270  q10/50/90=0.715/0.819/0.955  半衰期≈    3.6 tok
+  full_v53dmh_40k layer  6: gamma_mean=0.8273  q10/50/90=0.712/0.822/0.956  半衰期≈    3.7 tok
+  full_v53dme_40k layer  0: gamma_mean=0.8231  q10/50/90=0.716/0.811/0.952  半衰期≈    3.6 tok
+  full_v53dme_40k layer  1: gamma_mean=0.8236  q10/50/90=0.713/0.815/0.954  半衰期≈    3.6 tok
+  full_v53dme_40k layer  2: gamma_mean=0.8273  q10/50/90=0.712/0.822/0.955  半衰期≈    3.7 tok
+  full_v53dme_40k layer  3: gamma_mean=0.8274  q10/50/90=0.712/0.817/0.954  半衰期≈    3.7 tok
+  full_v53dme_40k layer  4: gamma_mean=0.8280  q10/50/90=0.712/0.821/0.956  半衰期≈    3.7 tok
+  full_v53dme_40k layer  5: gamma_mean=0.8316  q10/50/90=0.720/0.825/0.959  半衰期≈    3.8 tok
+  full_v53dme_40k layer  6: gamma_mean=0.8290  q10/50/90=0.716/0.821/0.956  半衰期≈    3.7 tok
+  full_v53dms_40k layer  0: gamma_mean=0.8081  q10/50/90=0.701/0.790/0.947  半衰期≈    3.3 tok
+  full_v53dms_40k layer  1: gamma_mean=0.8213  q10/50/90=0.705/0.814/0.954  半衰期≈    3.5 tok
+  full_v53dms_40k layer  2: gamma_mean=0.8317  q10/50/90=0.724/0.828/0.956  半衰期≈    3.8 tok
+  full_v53dms_40k layer  3: gamma_mean=0.8315  q10/50/90=0.721/0.825/0.957  半衰期≈    3.8 tok
+  full_v53dms_40k layer  4: gamma_mean=0.8278  q10/50/90=0.715/0.820/0.954  半衰期≈    3.7 tok
+  full_v53dms_40k layer  5: gamma_mean=0.8273  q10/50/90=0.714/0.819/0.957  半衰期≈    3.7 tok
+  full_v53dms_40k layer  6: gamma_mean=0.8277  q10/50/90=0.714/0.820/0.956  半衰期≈    3.7 tok
+
+结果已存 longrange_results.json
