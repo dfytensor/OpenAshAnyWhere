@@ -632,6 +632,8 @@ def main():
     L = args.seq_len
 
     torch.manual_seed(2024)
+    from ckpt_guard import assert_zip_integrity
+    assert_zip_integrity(args.data, 'training data cache')   # 完整性门：坏 token 不得进训练
     raw = torch.load(args.data, map_location='cpu', weights_only=True)
     stream = torch.cat([d.long() for d in raw]).cuda()
     n_val = 200_000

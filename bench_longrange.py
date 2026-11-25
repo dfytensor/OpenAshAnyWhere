@@ -26,6 +26,8 @@ CKPTS = {'v3.0 pure': (r'/mnt/f/OpenASH2605/minimind_v30_pure/v3_minimind.pt', F
 VOC, HID, HEADS, LAYERS = 23004, 768, 8, 12
 
 torch.manual_seed(2024)
+from ckpt_guard import assert_zip_integrity
+assert_zip_integrity(DATA, 'data cache')   # 完整性门：CRC 坏则拒载（PyTorch 不校验 CRC）
 raw = torch.load(DATA, map_location='cpu', weights_only=True)
 stream = torch.cat([d.long() for d in raw]).cuda()
 val_stream = stream[-200_000:]
@@ -79,6 +81,7 @@ def load_model(key):
         if arch is not None:
             torch.manual_seed(2024)
             m = tab_build(arch)
+            assert_zip_integrity(path, key)
             sd = torch.load(path, map_location='cpu', weights_only=True)
             ret = m.load_state_dict(sd, strict=False)
             n_miss = len(ret.missing_keys)
@@ -132,8 +135,9 @@ def load_model(key):
                                    or key.startswith('big_v36b1') or key.startswith('big_v37')
                                    or key.startswith('scale_v37') or key.startswith('full_v37') else None),
                            kv_backend=backend, kv_beta_init=beta_init, short_conv=('v37' in key))
-    sd = torch.load(os.path.join(key, 'model.pt') if key not in CKPTS
-                    else CKPTS[key][0], map_location='cpu', weights_only=True)
+    _p = os.path.join(key, 'model.pt') if key not in CKPTS else CKPTS[key][0]
+    assert_zip_integrity(_p, key)
+    sd = torch.load(_p, map_location='cpu', weights_only=True)
     m.load_state_dict(sd)
     m.eval()
     return m.cuda()

@@ -29,6 +29,8 @@ args = ap.parse_args()
 
 DEV = 'cuda'
 torch.manual_seed(2024)
+from ckpt_guard import assert_zip_integrity
+assert_zip_integrity(args.data, 'training data cache')
 raw = torch.load(args.data, map_location='cpu', weights_only=True)
 stream = torch.cat([d.long() for d in raw])
 train_win = stream[:len(stream) - 200_000].unfold(0, 385, 1)
