@@ -47,7 +47,7 @@ def load_model(key):
         m = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=512, model_flag='train',
                        use_fused=True, use_decay=ud)
     else:
-        path = os.path.join(key, 'model.pt')
+        path = os.path.join(os.environ.get('CKPT_ROOT', '.'), key, 'model.pt')
         # v4.2+ 全部 scale_* 变体：直接走 train_ab.build（训练配置的唯一真相源）。
         # 加载诊断：strict=False 但打印 missing/unexpected——配置漂移必须可见，不允许静默错探。
         from train_ab import build as tab_build
@@ -66,6 +66,7 @@ def load_model(key):
                     ('full_v53dme_80k', 'v53dme'), ('full_v53dmg_40k', 'v53dmg'),
                     ('full_v53dme_40k_t1024', 'v53dme'), ('full_v53dme_40k', 'v53dme'),
                     ('full_v53dms_40k', 'v53dms'), ('full_v53dms_80k', 'v53dms'),
+                    ('full_v53dml_40k', 'v53dml'), ('full_v53dmq_40k', 'v53dmq'),
                     ('full_v53dmh_40k', 'v53dmh'), ('full_v53dmh_80k', 'v53dmh'),
                     ('scale_v53dmep_15k', 'v53dmep'),
                     ('scale_v53dm_15k_v2', 'v53dm'),

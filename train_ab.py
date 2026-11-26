@@ -322,6 +322,38 @@ def build(arch):
                           dm_state=True, kv_decay_spread=True,
                           kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999,
                           dm_gate=True)
+    if arch == 'v53dml':
+        # v5.3DML: dms + Loom 读端口移植——侧记忆→主头的读端口由静态逐头标量改为逐 token 门控
+        #        route = σ(dm_route_h + x·w_h)，w 零初始化（起点 = dms 逐位等价）；+43K 参数
+        #        依据：LoomFormer 消融中"读端口动态化"是最重要因素（去掉后只保留 75.4%）
+        return OpenASH_V3(VOC, HID, 8, 7, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=240, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=1792, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192, use_read=False,
+                          dm_state=True, kv_decay_spread=True,
+                          kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999,
+                          dm_gate=True, dm_dynroute=True)
+    if arch == 'v53dmq':
+        # v5.3DMQ: dms + 侧记忆 query L2 归一化（与 k 同口径；GDN 的 l2norm 语义）——单旋钮对照 dms@40k
+        #        侧记忆本就是 GDN 几何却无衰减；给它 GDN 的外推机制。头间半衰期散布
+        #        69/231/1386/13863 tok，a_proj 零初始化（起点=静态衰减）；+21.6K 参数等规模内
+        return OpenASH_V3(VOC, HID, 8, 7, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=240, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=1792, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192, use_read=False,
+                          dm_state=True, kv_decay_spread=True,
+                          kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999,
+                          dm_gate=True, dm_qnorm=True)
     if arch == 'v53dmh':
         # v5.3DMH: 混合侧记忆——前 2 头门控（GDN 式输入调制衰减，管外推）+ 后 2 头永久纯 delta
         #         （管召回）。dme（全永久）召回胜 GDN @128-384、dms（全门控）LM 胜——两头兼保的设计
