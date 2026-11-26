@@ -147,6 +147,238 @@ def build(arch):
                           kv_dim=192, kv_backend='delta_fla', kv_beta_init=4.0,
                           short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
                           mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True)
+    if arch == 'v53gw':
+        # v5.3GW: KV 读出幅值旋钮 γ_kv——DMDA-2x 伪影信号的受控检验。逐层可学习标量
+        #        （init 1.0 恒等启动，+1 参数/层），其余 = v53w 逐位不动；对照 w@15k 12.65
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=192, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
+                          kv_gamma=True)
+    if arch == 'v53gw2':
+        # v5.3GW2: γ_kv init 2.0 可学习——双应用（DMDA-2x）在 w 架构上的精确等价重演。
+        #        隔离实验：w 单独受 2× KV 支路梯度能否复现 dm-2x 的 12.08？
+        #        复现→优化路径效应为真配方轴；不复现→dm 交互特有，全线闭合
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=192, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
+                          kv_gamma=True, kv_gamma_init=2.0)
+    if arch == 'v53e2':
+        # v5.3E2: 等规模状态比例重分配——kv256 状态全额保留，FFN 专家 4→2，
+        #         104.8M 严格低于 GDN 106.3M（用户命题：只调状态比例、同规模达 GDN 水平）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
+                          kv_beta_tok=True)
+    if arch == 'v53d7':
+        # v5.3D7: 等规模最后一杠杆——深度轴。em 因子化 R=192（省 13.1M ≈ 一层）兑换第 7 层
+        #         （kv256 状态 7×295K = 3.67M 总量，深度 7 vs GDN 5 层深度优势）；
+        #         ~104.4M ≈ GDN 106.3M 的 98.2%（等规模约束内）
+        return OpenASH_V3(VOC, HID, 8, 7, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192)
+    if arch == 'v53og':
+        # v5.3OG: GDN 输出级复刻（读侧嫌疑 #2，最后一项）——逐头 RMS over kv_dh + o_norm
+        #        权重 + sigmoid 输入门（g_proj），替代跨头轴 RMS + 静态门；其余 = v53w 逐位不动
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=192, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_ogate=True, kv_beta_tok=True)
+    if arch == 'v53r0':
+        # v5.3R0: aux 读出切除（pure_read）——诊断显示模型长训练中主动调低 aux 权重
+        #        （o_mix 0.95→0.88），假设 aux 混合稀释读出精度（利用曲线 0.24 差距的读侧嫌疑）。
+        #        零参数变化，纯功能消融；其余 = v53w 逐位不动
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=192, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
+                          pure_read=True)
+    if arch == 'v53f1':
+        # v5.3F1: 三兄弟架构融合（用户命题）——kr 宽状态(kv256)+6层 × e2↔kr 专家中位(3)
+        #         × d7 em 因子化(R=192，中性已证) ≈ 105.9M = GDN 99.6%（严格等规模）。
+        #         从零重训（非蒸馏），等规模验证融合架构能否超越三兄弟单模（kr 9.58 / e2 9.98）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=3, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192)
+    if arch == 'v53f1':
+        # v5.3F1: 三兄弟架构融合（用户命题）——kr 宽状态(kv256)+6层 × e2↔kr 专家中位(3)
+        #         × d7 em 因子化(R=192，中性已证) ≈ 105.9M = GDN 99.6%（严格等规模）。
+        #         从零重训（非蒸馏），等规模验证融合架构能否超越三兄弟单模（kr 9.58 / e2 9.98）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=3, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192)
+    if arch == 'v53v384':
+        # v5.3V384: 值侧扩展再战 kv384——K 顶 kernel 帽(256)，V 扩到 384（FLA 无 V 帽，
+        #          GDN 自身即 K256/V512）；v = concat(k̂_256, v_extra_128) 保承重墙；
+        #        状态 8×256×384 = 786K/层 = GDN 逐层持平、总量 1.2×；~139.6M（+31.4% 如实披露）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_v_dim=384, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, state_split=True, mem_heads=3,
+                          mem_force=True, ffn_hidden=2048, kv_out_gdn=True, kv_beta_tok=True,
+                          pure_read=True)
+    if arch == 'v53dme':
+        # v5.3DME: 等规模 DMDA——dm_v2（111.2M）裁剪至 ≤GDN 106.3M：FFN 2048→1792（−12.5%）
+        #         + kv256→240（−6.25%，饱和律 ≥192 召回安全）；侧记忆 4×96/衰减分化/对称写入
+        #         全部不动（承重墙+制胜机制）；105.18M = GDN 98.9%，比 f1（105.8M）还小。
+        #         目标：f1 9.85 的等规模纪录正面挑战（预注册已成文）
+        return OpenASH_V3(VOC, HID, 8, 7, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=240, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=1792, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192, use_read=False,
+                          dm_state=True, kv_decay_spread=True,
+                          kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999)
+    if arch == 'v53dmep':
+        # v5.3DMEP: dme + 位置条件化递推调制——E1 动态权重的 e_t 轴移植：β/衰减逐位置
+        #         查表偏移（零初始化恒等启动，+32K 参数/层，零 FLOPs）；等规模内 105.41M
+        return OpenASH_V3(VOC, HID, 8, 7, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=240, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=1792, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192, use_read=False,
+                          dm_state=True, kv_decay_spread=True,
+                          kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999,
+                          pos_mod=True)
+    if arch == 'v53dmg':
+        # v5.3DMG: dme + 深度分级衰减先验——GDN 40k 实测配方移植（L0 1.4tok→深层 16tok
+        #         的深度梯度；我方全层平坦 3.7tok）。零参数零 FLOPs，纯初始化；105.18M 等规模
+        return OpenASH_V3(VOC, HID, 8, 7, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=240, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=1792, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192, use_read=False,
+                          dm_state=True, kv_decay_spread=True,
+                          kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999,
+                          kv_decay_grad=True)
+    if arch == 'v53dms':
+        # v5.3DMS: dme + 侧记忆门控 delta（GDN 式输入调制衰减）——长程外推失败的架构正解：
+        #        侧记忆本就是 GDN 几何却无衰减；给它 GDN 的外推机制。头间半衰期散布
+        #        69/231/1386/13863 tok，a_proj 零初始化（起点=静态衰减）；+21.6K 参数等规模内
+        return OpenASH_V3(VOC, HID, 8, 7, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=240, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=1792, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192, use_read=False,
+                          dm_state=True, kv_decay_spread=True,
+                          kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999,
+                          dm_gate=True)
+    if arch == 'v53dmh':
+        # v5.3DMH: 混合侧记忆——前 2 头门控（GDN 式输入调制衰减，管外推）+ 后 2 头永久纯 delta
+        #         （管召回）。dme（全永久）召回胜 GDN @128-384、dms（全门控）LM 胜——两头兼保的设计
+        return OpenASH_V3(VOC, HID, 8, 7, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=240, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=1792, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192, use_read=False,
+                          dm_state=True, kv_decay_spread=True,
+                          kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999,
+                          dm_gate=2)
+    if arch == 'v53rf1':
+        # v5.3RF1: ASH-F1 + 回看通道（ReadChannel，O(1) 逐字回访窗 512 + 2头×64 读注意力
+        #         + 零初始化门）——人类式"有限工作记忆 + 返回去看"机制；数学 CoT 试金石。
+        #        参数 ≈ ASH-F1 + 2.75M（读通道 7 层）；推理状态 +3.7MB（固定）
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=3, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192, use_read=True)
+    if arch == 'v53dm':
+        # v5.3DM: 双记忆 Delta 架构（DMDA）——d7 底座（7层 kv256 2专家 em因子化）+ 逐头
+        #        多尺度衰减分化（γ 0.90~0.999 对数散布）+ DMDA 侧记忆（4头×96 纯学习
+        #        k/q/v GDN 几何迷你复刻，内容寻址第二记忆，逐头路由门）；多步 CoT 课程主战场。
+        #        ~108.6M（GDN 102%，近等规模）；侧记忆暂只接 prefill/评测路径（解码态线程后补）
+        return OpenASH_V3(VOC, HID, 8, 7, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192, use_read=False,
+                          dm_state=True, kv_decay_spread=True,
+                          kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999)
+    if arch == 'v53ef':
+        # v5.3EF: 等规模资金来源实验——em 因子化 R=192（省 13.1M）兑换 kv256 状态
+        #        （8×384×384×6 = 7.08M 元素 = GDN 3.93M 的 1.8×）；104.5M ≈ GDN 106.3M 的 98.3%。
+        #        命题：同规模、只调状态比例（FFN 与 em 份额 → 状态份额）逼近 GDN LM
+        return OpenASH_V3(VOC, HID, 8, 6, max_seq_len=2048, model_flag='train',
+                          use_fused=True, use_decay=True,
+                          pre_norm=True, ffn_act='silu',
+                          decay_init=(0.0001, 0.35), decay_v_std=0.04,
+                          kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True,
+                          kv_dim=256, kv_backend='delta_fla', kv_beta_init=4.0,
+                          short_conv=True, moe_ffn=True, moe_experts=2, state_split=True,
+                          mem_heads=3, mem_force=True, ffn_hidden=2048, kv_out_gdn=True,
+                          kv_beta_tok=True, em_factor_r=192)
     if arch == 'v53k':
         # v5.3K: kv_dim 256（每层状态 8×256×256 = 524K = GDN 786K 的 67%）——容量阶梯第三级
         #        （96→192 已证 LM −2.7%；256 为 kernel 极限探测位）；~131M 如实披露
@@ -388,14 +620,20 @@ def main():
     ap.add_argument('--eval_every', type=int, default=2000)
     ap.add_argument('--anchor_lambda', type=float, default=0.0,
                     help='召回锚定：kv_beta_w/o_mix 向初值的相对 L2 惩罚系数（0=关闭）')
+    ap.add_argument('--seq_len', type=int, default=384,
+                    help='训练窗长（v5.3 长窗协议：384→1024，同 token 预算下 bs 等比缩减）')
+    ap.add_argument('--accum', type=int, default=1,
+                    help='梯度累积微批数（等效 batch = batch_size × accum；优化步数/调度/Token 量不变）')
     args = ap.parse_args()
     arch = args.arch
     os.makedirs(args.out, exist_ok=True)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
-    L = 384
+    L = args.seq_len
 
     torch.manual_seed(2024)
+    from ckpt_guard import assert_zip_integrity
+    assert_zip_integrity(args.data, 'training data cache')   # 完整性门：坏 token 不得进训练
     raw = torch.load(args.data, map_location='cpu', weights_only=True)
     stream = torch.cat([d.long() for d in raw]).cuda()
     n_val = 200_000
@@ -417,7 +655,11 @@ def main():
 
     n_win_eval = 256
     @torch.no_grad()
-    def evaluate(bs=32):
+    def evaluate(bs=None):
+        # v5.3 长窗协议修复：评估批必须随窗长等比缩放（原硬编码 bs=32 在 T=1024 时是训练批的
+        #   2.7 倍，每次评估把显存顶到天花板 → 分配器碎片化重试风暴，436ms→6129ms/step 渐进崩溃）
+        if bs is None:
+            bs = max(2, (32 * 384) // L)
         model.eval()
         n_win = min(256, val_win.shape[0])
         stride = max(1, val_win.shape[0] // n_win)
@@ -431,6 +673,7 @@ def main():
             tot += loss.item() * win[:, :-1].numel()
             cnt += win[:, :-1].numel()
         model.train()
+        torch.cuda.empty_cache()
         return tot / cnt
 
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.01)
@@ -469,13 +712,16 @@ def main():
         lr = lr_at(step)
         for gp in opt.param_groups:
             gp['lr'] = lr
-        batch = next(it)
-        with torch.autocast('cuda', dtype=torch.bfloat16):
-            loss, _ = model.forward_loss(batch[:, :-1], batch[:, 1:], fused_ce=True)
-        if anchored:
-            loss = loss + anchor_loss()
         opt.zero_grad()
-        loss.backward()
+        # v5.3: 梯度累积（--accum N：batch_size × N = 等效 batch，优化步数/LR 调度/Token 量均不变；
+        #   宿主 GPU 争用时的显存对策。accum=1 时与原循环逐位等价）
+        for _mi in range(args.accum):
+            batch = next(it)
+            with torch.autocast('cuda', dtype=torch.bfloat16):
+                loss, _ = model.forward_loss(batch[:, :-1], batch[:, 1:], fused_ce=True)
+            if anchored:
+                loss = loss + anchor_loss()
+            (loss / args.accum).backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
         if step % 100 == 0 or step == 1:

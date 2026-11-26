@@ -9,12 +9,12 @@ import sys
 
 import torch
 
-sys.path.insert(0, '.')
+sys.path.insert(0, r'F:\OpenASH2605')
 from open_ash_voc import OpenASHVoc
 from config import agent_voc_path
 
-SRC = r'minimind_data\sft_t2t_mini.jsonl'
-OUT = r'minimind_data\sft_cached_60000_384.pt'
+SRC = r'F:\OpenASH2605\minimind_data\sft_t2t_mini.jsonl'
+OUT = r'F:\OpenASH2605\minimind_data\sft_cached_60000_384.pt'
 N_SAMPLES = 60000
 WIN = 385          # L + 1
 

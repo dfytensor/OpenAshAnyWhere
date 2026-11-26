@@ -6,13 +6,13 @@ PI 是标准外推适配（ bieten et al. 2023）：推理时位置 t → t/s。
 import sys
 import math
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-sys.path.insert(0, '.')
+sys.path.insert(0, r'F:\OpenASH2605')
 import torch
 from open_ash_v3 import OpenASH_V3
 from baseline_tf import TransformerLM, rope_cache
 
 DEV = 'cuda'
-DATA = r'minimind_data\pretrain_cached_1270238_384.pt'
+DATA = r'F:\OpenASH2605\minimind_data\pretrain_cached_1270238_384.pt'
 VOC, HID, HEADS, LAYERS = 23004, 768, 8, 12
 SCALE = 4   # 2048 / 512（训练有效位置 ~384）
 
@@ -22,13 +22,13 @@ stream = torch.cat([d.long() for d in raw]).cuda()
 val_stream = stream[-200_000:]
 
 tf = TransformerLM(VOC, HID, HEADS, 11, max_seq_len=2048).to(DEV)
-tf.load_state_dict(torch.load(r'big_tf\model.pt', map_location='cpu', weights_only=True))
+tf.load_state_dict(torch.load(r'F:\OpenASH2605\big_tf\model.pt', map_location='cpu', weights_only=True))
 tf.eval()
 v35 = OpenASH_V3(VOC, HID, HEADS, LAYERS, max_seq_len=2048, model_flag='train',
                  use_fused=True, use_decay=True, pre_norm=True, ffn_act='silu',
                  decay_init=(0.0001, 0.35), decay_v_std=0.04,
                  kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True).to(DEV)
-v35.load_state_dict(torch.load(r'big_v35\model.pt', map_location='cpu', weights_only=True))
+v35.load_state_dict(torch.load(r'F:\OpenASH2605\big_v35\model.pt', map_location='cpu', weights_only=True))
 v35.eval()
 
 

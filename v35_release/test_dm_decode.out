@@ -1,0 +1,47 @@
+=== T1: kernel 级递推语义（单步 vs chunk）===
+  门控（输出尺度 0.023）:
+     本实现（先衰减→读→写→q·S·K^-0.5）              max|Δo|/scale = 6.56e-02 | mean|Δo|/scale = 2.26e-03
+     反例A：衰减前读                             max|Δo|/scale = 4.91e-01 | mean|Δo|/scale = 2.03e-02
+     反例B：漏 q 的 K^-0.5                     max|Δo|/scale = 9.20e+01 | mean|Δo|/scale = 6.46e+00
+     终态 max|Δh|/h_max = 4.64e-03
+  无门控（输出尺度 0.138）:
+     本实现（先衰减→读→写→q·S·K^-0.5）              max|Δo|/scale = 2.53e-02 | mean|Δo|/scale = 3.28e-03
+     反例A：衰减前读                             max|Δo|/scale = 2.53e-02 | mean|Δo|/scale = 3.28e-03
+     反例B：漏 q 的 K^-0.5                     max|Δo|/scale = 4.81e+01 | mean|Δo|/scale = 6.81e+00
+     终态 max|Δh|/h_max = 4.08e-03
+
+=== T2 dms@80k（T=512, prefill P=256, 逐 token 解码 256 步）===
+  logits |Δ|: max 0.5625 | mean 0.04613 | logits std 3.40 | argmax 一致率 99.61%
+  CE(ppl) 全序列 2.4444 (ppl 11.52) vs 解码 2.4438 (ppl 11.52) | CE |Δ| mean 0.01858 max 0.3303
+  T3 prefill 路径回归: 全序列[:P] vs 单独 prefill |Δ|max = 3.12e-01
+  T4 携带状态: 14.01 MB（每层 2.001 MB × 7 层）
+In file included from /mnt/f/uv-python/cpython-3.12.16-linux-x86_64-gnu/include/python3.12/Python.h:12,
+                 from /tmp/tmpkqesvvq5/__triton_launcher.c:7:
+/mnt/f/uv-python/cpython-3.12.16-linux-x86_64-gnu/include/python3.12/pyconfig.h:1877:9: warning: ‘_POSIX_C_SOURCE’ redefined
+ 1877 | #define _POSIX_C_SOURCE 200809L
+      |         ^~~~~~~~~~~~~~~
+In file included from /usr/include/x86_64-linux-gnu/bits/libc-header-start.h:33,
+                 from /usr/include/stdlib.h:26,
+                 from /mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages/triton/backends/nvidia/include/cuda.h:56,
+                 from /tmp/tmpkqesvvq5/__triton_launcher.c:2:
+/usr/include/features.h:319:10: note: this is the location of the previous definition
+  319 | # define _POSIX_C_SOURCE        202405L
+      |          ^~~~~~~~~~~~~~~
+
+=== T2 dme@80k（T=512, prefill P=256, 逐 token 解码 256 步）===
+  logits |Δ|: max 0.3438 | mean 0.04123 | logits std 2.74 | argmax 一致率 99.22%
+  CE(ppl) 全序列 2.4716 (ppl 11.84) vs 解码 2.4704 (ppl 11.83) | CE |Δ| mean 0.01533 max 0.1695
+  T3 prefill 路径回归: 全序列[:P] vs 单独 prefill |Δ|max = 2.81e-01
+  T4 携带状态: 14.01 MB（每层 2.001 MB × 7 层）
+
+=== T2 dmh@80k（T=512, prefill P=256, 逐 token 解码 256 步）===
+  logits |Δ|: max 1.6602 | mean 0.04036 | logits std 3.03 | argmax 一致率 99.22%
+  CE(ppl) 全序列 2.4176 (ppl 11.22) vs 解码 2.4097 (ppl 11.13) | CE |Δ| mean 0.02038 max 1.1827
+  T3 prefill 路径回归: 全序列[:P] vs 单独 prefill |Δ|max = 2.81e-01
+  T4 携带状态: 14.01 MB（每层 2.001 MB × 7 层）
+
+=== T2 kr@40k(无侧记忆基线)（T=512, prefill P=256, 逐 token 解码 256 步）===
+  logits |Δ|: max 0.3906 | mean 0.03326 | logits std 3.66 | argmax 一致率 99.22%
+  CE(ppl) 全序列 2.6672 (ppl 14.40) vs 解码 2.6670 (ppl 14.40) | CE |Δ| mean 0.01056 max 0.0721
+  T3 prefill 路径回归: 全序列[:P] vs 单独 prefill |Δ|max = 5.62e-01
+  T4 携带状态: 12.65 MB（每层 2.108 MB × 6 层）

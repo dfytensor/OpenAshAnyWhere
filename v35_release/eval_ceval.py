@@ -14,12 +14,12 @@ import pandas as pd
 import torch
 
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-sys.path.insert(0, '.')
+sys.path.insert(0, r'F:\OpenASH2605')
 from open_ash_voc import OpenASHVoc
 from open_ash_v3 import OpenASH_V3
 from config import agent_voc_path
 
-CEVAL = r'ceval_data'
+CEVAL = r'F:\OpenASH2605\ceval_data'
 DEV = 'cuda'
 LETTERS = ['A', 'B', 'C', 'D']
 
@@ -34,9 +34,12 @@ def build(arch):
                   kv_channel=True, kv_decay=0.98)
         if arch in ('v35', 'v34'):
             kw.update(kv_norm_keys=True, kv_beta=True)
-    m = OpenASH_V3(23004, 768, 8, 12, max_seq_len=2048, model_flag='train',
-                   use_fused=True, use_decay=True, **kw)
-    return m
+        m = OpenASH_V3(23004, 768, 8, 12, max_seq_len=2048, model_flag='train',
+                       use_fused=True, use_decay=True, **kw)
+        return m
+    # v5.3+: v53 系架构统一走 train_ab.build（单一配置真相源）
+    from train_ab import build as tab_build
+    return tab_build(arch)
 
 
 def load_ckpt(m, path):

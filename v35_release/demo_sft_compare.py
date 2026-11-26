@@ -1,7 +1,7 @@
 """SFT 后生成质量定性对比：sft_v35 vs sft_tf 同 prompt 生成。"""
 import sys
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-sys.path.insert(0, '.')
+sys.path.insert(0, r'F:\OpenASH2605')
 import torch
 from open_ash_v3 import OpenASH_V3
 from baseline_tf import TransformerLM
@@ -17,13 +17,13 @@ def load_v35():
                    use_decay=True, pre_norm=True, ffn_act='silu',
                    decay_init=(0.0001, 0.35), decay_v_std=0.04,
                    kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True).to(DEV)
-    m.load_state_dict(torch.load(r'sft_v35\model.pt', map_location='cpu', weights_only=True))
+    m.load_state_dict(torch.load(r'F:\OpenASH2605\sft_v35\model.pt', map_location='cpu', weights_only=True))
     return m.eval()
 
 
 def load_tf():
     m = TransformerLM(23004, 768, 8, 11, max_seq_len=2048).to(DEV)
-    m.load_state_dict(torch.load(r'sft_tf\model.pt', map_location='cpu', weights_only=True))
+    m.load_state_dict(torch.load(r'F:\OpenASH2605\sft_tf\model.pt', map_location='cpu', weights_only=True))
     return m.eval()
 
 

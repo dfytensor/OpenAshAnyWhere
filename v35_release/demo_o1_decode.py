@@ -5,7 +5,7 @@
 """
 import sys, time, math
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-sys.path.insert(0, '.')
+sys.path.insert(0, r'F:\OpenASH2605')
 import torch
 from open_ash_v3 import OpenASH_V3
 from baseline_tf import TransformerLM
@@ -19,10 +19,10 @@ v35 = OpenASH_V3(23004, 768, 8, 12, max_seq_len=2048, model_flag='train', use_fu
                  use_decay=True, pre_norm=True, ffn_act='silu',
                  decay_init=(0.0001, 0.35), decay_v_std=0.04,
                  kv_channel=True, kv_decay=0.98, kv_norm_keys=True, kv_beta=True).to(DEV)
-v35.load_state_dict(torch.load(r'big_v35\model.pt', map_location='cpu', weights_only=True))
+v35.load_state_dict(torch.load(r'F:\OpenASH2605\big_v35\model.pt', map_location='cpu', weights_only=True))
 v35.eval()
 tf = TransformerLM(23004, 768, 8, 11, max_seq_len=2048).to(DEV)
-tf.load_state_dict(torch.load(r'big_tf\model.pt', map_location='cpu', weights_only=True))
+tf.load_state_dict(torch.load(r'F:\OpenASH2605\big_tf\model.pt', map_location='cpu', weights_only=True))
 tf.eval()
 
 

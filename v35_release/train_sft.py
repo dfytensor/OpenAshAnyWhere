@@ -11,11 +11,11 @@ import time
 
 import torch
 
-sys.path.insert(0, '.')
+sys.path.insert(0, r'F:\OpenASH2605')
 from train_ab import build
 
 DEV = 'cuda'
-SFT_DATA = r'minimind_data\sft_cached_60000_384.pt'
+SFT_DATA = r'F:\OpenASH2605\minimind_data\sft_cached_60000_384.pt'
 
 
 def main():
@@ -27,6 +27,7 @@ def main():
     ap.add_argument('--lr', type=float, default=1e-4)
     ap.add_argument('--warmup', type=int, default=150)
     ap.add_argument('--out', required=True)
+    ap.add_argument('--data', default=r'F:\OpenASH2605\minimind_data\sft_cached_60000_384.pt')
     ap.add_argument('--eval_every', type=int, default=1000)
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
@@ -35,7 +36,7 @@ def main():
     L = 384
 
     torch.manual_seed(2024)
-    sft = torch.load(SFT_DATA, map_location='cpu', weights_only=True)
+    sft = torch.load(args.data, map_location='cpu', weights_only=True)
     if isinstance(sft, (tuple, list)):
         sft = sft[0]
     if sft.dim() == 3:

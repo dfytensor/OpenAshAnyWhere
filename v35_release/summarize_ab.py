@@ -10,7 +10,7 @@ OUTS = [('v3.0 pure', 'ab_v30'), ('v3.1 decay', 'ab_v31'), ('v3.2 modern', 'ab_v
 print(f'{"arch":20s} {"params":>12s} {"val PPL":>9s} {"val loss":>9s} {"ms/step":>8s}')
 print('-' * 62)
 for tag, d in OUTS:
-    p = os.path.join('.', d, 'train_log.json')
+    p = os.path.join(r'F:\OpenASH2605', d, 'train_log.json')
     if not os.path.exists(p):
         print(f'{tag:20s} {"(missing)":>12s}')
         continue
