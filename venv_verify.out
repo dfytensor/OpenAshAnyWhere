@@ -1,0 +1,3 @@
+site-packages: ['/mnt/f/OpenASH2605/wsl_venv/lib/python3.12/site-packages']
+packages: 60
+files OK: 21469 | HASH MISMATCH: 0 | MISSING: 0 | (unhashed entries e.g. RECORD/pyc: 60)
