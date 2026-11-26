@@ -410,6 +410,12 @@ class MaxStateSuper(torch.nn.Module):
         S_mem_prev = None
         if self.mem_extra and isinstance(s_kv, tuple):
             s_kv, S_mem_prev = s_kv
+        # v5.3DM-decode: 侧记忆状态打包在 kv 槽位 (s_kv, s_dm)——O(1) 解码线程化
+        s_dm_prev = None
+        if self.dm_state and isinstance(s_kv, tuple):
+            s_kv, s_dm_prev = s_kv
+        s_dm_new = s_dm_prev
+        d_out_dec = None
         qq = None
         if self.kv_channel:
             bx, sx = x.shape[0], x.shape[1]
@@ -486,7 +492,7 @@ class MaxStateSuper(torch.nn.Module):
             r = None
             out = out_l.transpose(1, 2).contiguous().view(b, s, d)
             if self.kv_channel:
-                return out, (e[:, :, -1:], s_kv_new)
+                return out, (e[:, :, -1:], (s_kv_new, s_dm_new) if self.dm_state else s_kv_new)
             return out, e[:, :, -1:]
         if self.gdn_core and FLA_GDN_OK and self.kv_channel:
             # v4.7: 键宽隔离实验——128 维键（96 c 流 + 32 学习扩展），其余保持 v44 冠军配方
@@ -521,7 +527,7 @@ class MaxStateSuper(torch.nn.Module):
             r = None
             out = out_l.transpose(1, 2).contiguous().view(b, s, d)
             if self.kv_channel:
-                return out, (e[:, :, -1:], s_kv_new)
+                return out, (e[:, :, -1:], (s_kv_new, s_dm_new) if self.dm_state else s_kv_new)
             return out, e[:, :, -1:]
         if qq is not None:
             cc_perm = c.permute(0, 3, 2, 1)
@@ -640,13 +646,13 @@ class MaxStateSuper(torch.nn.Module):
                                * torch.nn.functional.softplus(self.dm_a_proj(x).float()
                                                               + self.dm_dt_bias.float().view(1, 1, -1)))
                         d_g = d_g * self.dm_gmask.view(1, 1, -1)
-                        d_o, _ = chunk_gated_delta_rule(
+                        d_o, s_dm_new = chunk_gated_delta_rule(
                             q=d_q, k=d_k, v=d_v, g=d_g.to(torch.bfloat16), beta=db,
-                            initial_state=None, output_final_state=False)
+                            initial_state=s_dm_prev, output_final_state=True)
                     else:
-                        d_o, _ = chunk_delta_rule(
+                        d_o, s_dm_new = chunk_delta_rule(
                             q=d_q, k=d_k, v=d_v, beta=db,
-                            initial_state=None, output_final_state=False)
+                            initial_state=s_dm_prev, output_final_state=True)
                     d_o = d_o.float() * self.dm_norm_g.to(d_o.dtype).view(1, 1, 1, -1)
                     d_flat = d_o.reshape(bx, sx, self.dm_heads * self.dm_dim)
                     d_out = self.dm_o(d_flat).view(bx, sx, self.heads, self.d_head)
@@ -713,6 +719,41 @@ class MaxStateSuper(torch.nn.Module):
                 if self.kv_dh > self.d_head and self.kv_v_dim is None:
                     r = torch.einsum('bhd,hde->bhe', r, self.W_out_state.to(r.dtype))
                 s_kv_new = s_new
+                if self.dm_state:
+                    # v5.3DM-decode: 侧记忆 O(1) 单步——锚定 FLA 语义（与主通道同约定）：
+                    #   S ← a·S；corr = v − k·(a·S)；S ← a·S + (β·k)⊗corr；o = q·S·K^−0.5
+                    #   输入按 prefill 同样口径取 bf16（q/k/v/β/g 均先舍入），递推本身 fp32。
+                    d_k1 = self.dm_k(x).view(b, 1, self.dm_heads, self.dm_dim).to(torch.bfloat16)
+                    d_k1 = (d_k1 / (d_k1.norm(dim=-1, keepdim=True) + 1e-6)).to(torch.bfloat16)
+                    d_q1 = self.dm_q(x).view(b, 1, self.dm_heads, self.dm_dim).to(torch.bfloat16)
+                    d_v1 = self.dm_v(x).view(b, 1, self.dm_heads, self.dm_dim).to(torch.bfloat16)
+                    db1 = torch.sigmoid(self.dm_beta.view(1, 1, -1)
+                                        + torch.einsum('bsd,hd->bsh', x.float(),
+                                                       self.dm_beta_w.float())).to(torch.bfloat16)
+                    kd = d_k1.float().squeeze(1)
+                    qd = d_q1.float().squeeze(1)
+                    vd = d_v1.float().squeeze(1)
+                    bd = db1.float().squeeze(1)
+                    if s_dm_prev is None:
+                        S_dm = x.new_zeros(b, self.dm_heads, self.dm_dim, self.dm_dim,
+                                           dtype=torch.float32)
+                    else:
+                        S_dm = s_dm_prev.to(torch.float32)
+                    if self.dm_gate:
+                        g1 = (-torch.exp(self.dm_A_log.float()).view(1, -1)
+                              * torch.nn.functional.softplus(self.dm_a_proj(x).float()
+                                                             + self.dm_dt_bias.float().view(1, -1)))
+                        g1 = (g1.to(torch.bfloat16).float() * self.dm_gmask.view(1, -1)).squeeze(1)   # (B,H)
+                        S_dm = S_dm * torch.exp(g1)[:, :, None, None]
+                    sv = torch.einsum('bhkv,bhk->bhv', S_dm, kd)
+                    S_dm = S_dm + (kd * bd[:, :, None]).unsqueeze(-1) * (vd - sv).unsqueeze(-2)
+                    s_dm_new = S_dm
+                    d_o1 = torch.einsum('bhkv,bhk->bhv', S_dm, qd) * float(self.dm_dim) ** -0.5
+                    d_o1 = (d_o1.view(b, 1, self.dm_heads, self.dm_dim)
+                            * self.dm_norm_g.to(d_o1.dtype).view(1, 1, 1, -1))
+                    d_out_dec = self.dm_o(d_o1.reshape(b, 1, self.dm_heads * self.dm_dim))
+                    d_out_dec = d_out_dec.view(b, 1, self.heads, self.d_head)
+                    d_out_dec = d_out_dec * torch.sigmoid(self.dm_route).view(1, 1, -1, 1).to(d_out_dec.dtype)
             elif s_kv is not None and sx == 1:
                 # 增量单步（O(1) 解码，sum 写入）：S ← a·S + k̂⊗k̂；r = q·S
                 a_step = torch.exp(log_a[..., 0])                       # (B,H)
@@ -736,7 +777,10 @@ class MaxStateSuper(torch.nn.Module):
                 rp = r.permute(0, 2, 1)                          # (B, kv_dh, H)
                 if self.kv_dh < self.d_head:
                     rp = F.pad(rp, (0, 0, 0, self.d_head - self.kv_dh))
-                out_l = out_l + self._kv_out(rp.unsqueeze(2))
+                op_dec = rp.unsqueeze(2)
+                if d_out_dec is not None:
+                    op_dec = op_dec + d_out_dec.permute(0, 3, 1, 2).to(op_dec.dtype)
+                out_l = out_l + self._kv_out_scaled(op_dec)
 
             if self.mem_extra:
                 # v5.3M: 专用 MEM 永久组——c 流键（前三头）、g=0/β=1、专用 q_mem 查询。
@@ -775,7 +819,7 @@ class MaxStateSuper(torch.nn.Module):
         out = out_l.transpose(1, 2).contiguous().view(b, s, d)
 
         if self.kv_channel:
-            return out, (e[:, :, -1:], s_kv_new)
+            return out, (e[:, :, -1:], (s_kv_new, s_dm_new) if self.dm_state else s_kv_new)
         return out, e[:, :, -1:]
 
     def gen_model(self, a, b, c, d, e):

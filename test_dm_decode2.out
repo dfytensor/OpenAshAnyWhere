@@ -1,0 +1,29 @@
+=== M: kernel 输出对 output_final_state=True 不敏感 ===
+  |Δo| max = 0 | final_state shape (1, 4, 96, 96) dtype torch.float32 | |h| max 0.9430
+  fp32 initial_state accepted: o shape (1, 200, 4, 96), h3 dtype torch.float32
+
+=== T3': 改动前代码 vs 改动后代码：全序列前向（prefill 路径）===
+  dms@80k  logits |Δ|max = 0  → 逐位相同 ✓
+  dme@80k  logits |Δ|max = 0  → 逐位相同 ✓
+  dmh@80k  logits |Δ|max = 0  → 逐位相同 ✓
+  kr@40k   logits |Δ|max = 0  → 逐位相同 ✓
+
+=== T2b: fp32 模式（无 autocast）增量一致性 ===
+  dms@80k  fp32: logits |Δ| max 2.454e-01 mean 8.747e-03 | argmax 一致 99.61%
+  kr@40k   fp32: logits |Δ| max 4.707e-02 mean 2.965e-03 | argmax 一致 99.61%
+
+=== T4b: O(1) 证据——逐 token 解码延迟与状态 vs 上下文长度 ===
+  dms@80k（旗舰）:
+     全序列前向 T=256  52.7 ms（0.21 ms/token，随 T 线性）
+     全序列前向 T=1024 53.0 ms（0.05 ms/token，随 T 线性）
+     全序列前向 T=2048 51.0 ms（0.02 ms/token，随 T 线性）
+     解码 @ctx=128  45.98 ms/token（22 tok/s）| 状态 14.01 MB
+     解码 @ctx=1024 47.63 ms/token（21 tok/s）| 状态 14.01 MB
+     解码 @ctx=2048 47.95 ms/token（21 tok/s）| 状态 14.01 MB
+  kr@40k（无侧记忆）:
+     全序列前向 T=256  39.7 ms（0.15 ms/token，随 T 线性）
+     全序列前向 T=1024 39.3 ms（0.04 ms/token，随 T 线性）
+     全序列前向 T=2048 41.9 ms（0.02 ms/token，随 T 线性）
+     解码 @ctx=128  34.63 ms/token（29 tok/s）| 状态 12.65 MB
+     解码 @ctx=1024 34.56 ms/token（29 tok/s）| 状态 12.65 MB
+     解码 @ctx=2048 34.77 ms/token（29 tok/s）| 状态 12.65 MB

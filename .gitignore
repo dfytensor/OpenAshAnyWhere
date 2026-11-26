@@ -13,3 +13,5 @@ _precision_diffusion/
 
 critical_tokenization/
 frsm/FRSM/
+# 测试按需从 git 重建的改动前代码模块（见 test_dm_decode2/3.py）
+open_ash_v3_pre_decode.py
