@@ -1,0 +1,10 @@
+val tokens: 200,000
+
+===== A. 上下文长度扩展 PPL =====
+[load full_v53dml_80k] arch=v53dml params=105,240,156 missing=0 unexpected=0
+[load full_v53dms_80k] arch=v53dms params=105,197,148 missing=0 unexpected=0
+[load full_v53dme_80k] arch=v53dme params=105,175,588 missing=0 unexpected=0
+     Lfull_v53dml_80k full_gdn_160kfull_v53dms_80kfull_v53dme_80k
+    64      11.51ppl      11.78ppl      11.26ppl      11.41ppl
+   128       9.79ppl       9.86ppl       9.58ppl       9.69ppl
+   256       8.67ppl       8.60ppl       8.50ppl       8.60ppl
