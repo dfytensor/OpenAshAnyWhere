@@ -146,7 +146,7 @@ def bench(m, tag):
                     m(long_ids[:, :T])
             torch.cuda.synchronize()
             tf = (time.time() - t0) / 5
-        print('     全序列前向 T=%-4d %.1f ms（%.2f ms/token，随 T 线性）' % (T, tf * 1e3, tf * 1e3 / T))
+        print('     全序列前向 T=%-4d %.1f ms（摊薄 %.2f ms/token；batch 1 下被启动开销主导，总耗时近似不随 T 变）' % (T, tf * 1e3, tf * 1e3 / T))
     for C in (128, 1024, 2048):
         with torch.no_grad():
             with AC:

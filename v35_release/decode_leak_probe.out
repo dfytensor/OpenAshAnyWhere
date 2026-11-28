@@ -1,0 +1,16 @@
+dml@80k: 模型+prefill 后 allocated 499.4 MB | 携带状态 14.01 MB
+   解码 20 步后: allocated 477.7 MB（较基线 -21.7 MB）| 状态 14.01 MB
+   解码 40 步后: allocated 477.7 MB（较基线 -21.7 MB）| 状态 14.01 MB
+   解码 60 步后: allocated 477.7 MB（较基线 -21.7 MB）| 状态 14.01 MB
+   释放状态后: allocated 463.7 MB
+dms@80k: 模型+prefill 后 allocated 499.3 MB | 携带状态 14.01 MB
+   解码 20 步后: allocated 477.6 MB（较基线 -21.7 MB）| 状态 14.01 MB
+   解码 40 步后: allocated 477.6 MB（较基线 -21.7 MB）| 状态 14.01 MB
+   解码 60 步后: allocated 477.6 MB（较基线 -21.7 MB）| 状态 14.01 MB
+   释放状态后: allocated 463.5 MB
+kr@40k（无侧记忆）: 模型+prefill 后 allocated 604.8 MB | 携带状态 12.65 MB
+   解码 20 步后: allocated 583.2 MB（较基线 -21.6 MB）| 状态 12.65 MB
+   解码 40 步后: allocated 583.6 MB（较基线 -21.2 MB）| 状态 12.65 MB
+   解码 60 步后: allocated 583.2 MB（较基线 -21.6 MB）| 状态 12.65 MB
+   释放状态后: allocated 570.6 MB
+DECODE LEAK PROBE DONE

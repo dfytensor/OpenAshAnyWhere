@@ -14,16 +14,16 @@
 
 === T4b: O(1) 证据——逐 token 解码延迟与状态 vs 上下文长度 ===
   dms@80k（旗舰）:
-     全序列前向 T=256  52.7 ms（0.21 ms/token，随 T 线性）
+     全序列前向 T=256  57.8 ms（0.23 ms/token，随 T 线性）
      全序列前向 T=1024 53.0 ms（0.05 ms/token，随 T 线性）
-     全序列前向 T=2048 51.0 ms（0.02 ms/token，随 T 线性）
-     解码 @ctx=128  45.98 ms/token（22 tok/s）| 状态 14.01 MB
-     解码 @ctx=1024 47.63 ms/token（21 tok/s）| 状态 14.01 MB
-     解码 @ctx=2048 47.95 ms/token（21 tok/s）| 状态 14.01 MB
+     全序列前向 T=2048 53.6 ms（0.03 ms/token，随 T 线性）
+     解码 @ctx=128  48.12 ms/token（21 tok/s）| 状态 14.01 MB
+     解码 @ctx=1024 44.92 ms/token（22 tok/s）| 状态 14.01 MB
+     解码 @ctx=2048 45.42 ms/token（22 tok/s）| 状态 14.01 MB
   kr@40k（无侧记忆）:
-     全序列前向 T=256  39.7 ms（0.15 ms/token，随 T 线性）
-     全序列前向 T=1024 39.3 ms（0.04 ms/token，随 T 线性）
-     全序列前向 T=2048 41.9 ms（0.02 ms/token，随 T 线性）
-     解码 @ctx=128  34.63 ms/token（29 tok/s）| 状态 12.65 MB
-     解码 @ctx=1024 34.56 ms/token（29 tok/s）| 状态 12.65 MB
-     解码 @ctx=2048 34.77 ms/token（29 tok/s）| 状态 12.65 MB
+     全序列前向 T=256  43.5 ms（0.17 ms/token，随 T 线性）
+     全序列前向 T=1024 42.0 ms（0.04 ms/token，随 T 线性）
+     全序列前向 T=2048 41.2 ms（0.02 ms/token，随 T 线性）
+     解码 @ctx=128  37.75 ms/token（26 tok/s）| 状态 12.65 MB
+     解码 @ctx=1024 36.39 ms/token（27 tok/s）| 状态 12.65 MB
+     解码 @ctx=2048 38.17 ms/token（26 tok/s）| 状态 12.65 MB

@@ -48,6 +48,11 @@ def load_model(key):
                        use_fused=True, use_decay=ud)
     else:
         path = os.path.join(key, 'model.pt')
+        if not os.path.exists(path) and os.environ.get('CKPT_ROOT'):
+            # 本地无此 checkpoint 时回退到 CKPT_ROOT（如 E: 盘上的新训练产物）
+            _alt = os.path.join(os.environ['CKPT_ROOT'], key, 'model.pt')
+            if os.path.exists(_alt):
+                path = _alt
         # v4.2+ 全部 scale_* 变体：直接走 train_ab.build（训练配置的唯一真相源）。
         # 加载诊断：strict=False 但打印 missing/unexpected——配置漂移必须可见，不允许静默错探。
         from train_ab import build as tab_build
@@ -66,6 +71,8 @@ def load_model(key):
                     ('full_v53dme_80k', 'v53dme'), ('full_v53dmg_40k', 'v53dmg'),
                     ('full_v53dme_40k_t1024', 'v53dme'), ('full_v53dme_40k', 'v53dme'),
                     ('full_v53dms_40k', 'v53dms'), ('full_v53dms_80k', 'v53dms'),
+                    ('full_v53dml_40k', 'v53dml'), ('full_v53dmq_40k', 'v53dmq'),
+                    ('full_v53dml_80k', 'v53dml'), ('full_v53dmq_80k', 'v53dmq'),
                     ('full_v53dmh_40k', 'v53dmh'), ('full_v53dmh_80k', 'v53dmh'),
                     ('scale_v53dmep_15k', 'v53dmep'),
                     ('scale_v53dm_15k_v2', 'v53dm'),
@@ -175,7 +182,7 @@ def per_token_ce(m, ids):
 
 # ============================ Test A: 长度扩展 PPL ============================
 print('\n===== A. 上下文长度扩展 PPL =====')
-MODEL_KEYS = ['full_v53dmh_80k', 'full_gdn_160k', 'full_v53dms_80k', 'full_v53dme_80k']
+MODEL_KEYS = ['full_v53dml_80k', 'full_v53dmq_80k', 'full_gdn_160k', 'full_v53dms_80k']
 models = {k: load_model(k) for k in MODEL_KEYS}
 wrapper_keys = {k for k in MODEL_KEYS if not hasattr(models[k], 'decoder_layers')}
 lengths = [64, 128, 256, 384, 512, 1024, 2048]

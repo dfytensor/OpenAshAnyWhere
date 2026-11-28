@@ -115,7 +115,8 @@ class MaxStateSuper(torch.nn.Module):
                  kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999, kv_gamma=False,
                  kv_gamma_init=1.0,
                  pos_mod=False, layer_idx=0, num_layers=1,
-                 kv_decay_grad=False, dm_gate=False):
+                 kv_decay_grad=False, dm_gate=False,
+                 dm_dynroute=False, dm_qnorm=False):
         super(MaxStateSuper, self).__init__()
         self.heads = heads
         self.d_head = int(dim_size // heads)
@@ -258,6 +259,13 @@ class MaxStateSuper(torch.nn.Module):
                     self.dm_o = nn.Linear(self.dm_heads * self.dm_dim, self.d_head * self.heads,
                                           bias=False)
                     self.dm_route = nn.Parameter(torch.zeros(self.heads))  # 逐头路由门
+                    # v5.3DML（Loom 读端口移植）：侧记忆→主头的读端口由静态逐头标量改为逐 token 门控
+                    #        route = σ(dm_route_h + x·w_h)；w 零初始化 ⇒ 起点与静态路由逐位等价
+                    self.dm_dynroute = dm_dynroute
+                    if dm_dynroute:
+                        self.dm_route_w = nn.Parameter(torch.zeros(self.heads, dim_size))
+                    # v5.3DMQ：侧记忆 query L2 归一化（GDN 的 use_qk_l2norm_in_kernel 语义；与 k 同口径）
+                    self.dm_qnorm = dm_qnorm
                     self.dm_norm_g = nn.Parameter(torch.ones(self.dm_dim))
                     # v5.3DMS: 侧记忆门控——GDN 式输入调制衰减 g = -exp(A_log)·softplus(a_proj(x)+dt_bias)。
                     #        侧记忆本就是 GDN 几何却无衰减（纯 delta 永不遗忘→长程外推失败的贡献者）；
@@ -635,6 +643,8 @@ class MaxStateSuper(torch.nn.Module):
                     d_k = self.dm_k(x).view(bx, sx, self.dm_heads, self.dm_dim).to(torch.bfloat16)
                     d_k = (d_k / (d_k.norm(dim=-1, keepdim=True) + 1e-6)).to(torch.bfloat16)
                     d_q = self.dm_q(x).view(bx, sx, self.dm_heads, self.dm_dim).to(torch.bfloat16)
+                    if self.dm_qnorm:
+                        d_q = (d_q / (d_q.norm(dim=-1, keepdim=True) + 1e-6)).to(torch.bfloat16)
                     d_v = self.dm_v(x).view(bx, sx, self.dm_heads, self.dm_dim).to(torch.bfloat16)
                     db = torch.sigmoid(self.dm_beta.view(1, 1, -1)
                                        + torch.einsum('bsd,hd->bsh', x.float(),
@@ -656,7 +666,14 @@ class MaxStateSuper(torch.nn.Module):
                     d_o = d_o.float() * self.dm_norm_g.to(d_o.dtype).view(1, 1, 1, -1)
                     d_flat = d_o.reshape(bx, sx, self.dm_heads * self.dm_dim)
                     d_out = self.dm_o(d_flat).view(bx, sx, self.heads, self.d_head)
-                    d_route = torch.sigmoid(self.dm_route).view(1, 1, -1, 1).to(d_out.dtype)
+                    if self.dm_dynroute:
+                        # v5.3DML: 逐 token 读端口门控
+                        d_route = torch.sigmoid(self.dm_route.view(1, 1, -1, 1).float()
+                                                + torch.einsum('bsd,hd->bsh', x.float(),
+                                                               self.dm_route_w.float()).unsqueeze(-1)
+                                                ).to(d_out.dtype)
+                    else:
+                        d_route = torch.sigmoid(self.dm_route).view(1, 1, -1, 1).to(d_out.dtype)
                     d_out = d_out * d_route
                     o_p = o_p + d_out.permute(0, 3, 1, 2).to(o_p.dtype)
                     out_l = out_l + self._kv_out_scaled(o_p)
@@ -726,6 +743,8 @@ class MaxStateSuper(torch.nn.Module):
                     d_k1 = self.dm_k(x).view(b, 1, self.dm_heads, self.dm_dim).to(torch.bfloat16)
                     d_k1 = (d_k1 / (d_k1.norm(dim=-1, keepdim=True) + 1e-6)).to(torch.bfloat16)
                     d_q1 = self.dm_q(x).view(b, 1, self.dm_heads, self.dm_dim).to(torch.bfloat16)
+                    if self.dm_qnorm:
+                        d_q1 = (d_q1 / (d_q1.norm(dim=-1, keepdim=True) + 1e-6)).to(torch.bfloat16)
                     d_v1 = self.dm_v(x).view(b, 1, self.dm_heads, self.dm_dim).to(torch.bfloat16)
                     db1 = torch.sigmoid(self.dm_beta.view(1, 1, -1)
                                         + torch.einsum('bsd,hd->bsh', x.float(),
@@ -753,7 +772,14 @@ class MaxStateSuper(torch.nn.Module):
                             * self.dm_norm_g.to(d_o1.dtype).view(1, 1, 1, -1))
                     d_out_dec = self.dm_o(d_o1.reshape(b, 1, self.dm_heads * self.dm_dim))
                     d_out_dec = d_out_dec.view(b, 1, self.heads, self.d_head)
-                    d_out_dec = d_out_dec * torch.sigmoid(self.dm_route).view(1, 1, -1, 1).to(d_out_dec.dtype)
+                    if self.dm_dynroute:
+                        d_route = torch.sigmoid(self.dm_route.view(1, 1, -1, 1).float()
+                                                + torch.einsum('bsd,hd->bsh', x.float(),
+                                                               self.dm_route_w.float()).unsqueeze(-1)
+                                                ).to(d_out_dec.dtype)
+                    else:
+                        d_route = torch.sigmoid(self.dm_route).view(1, 1, -1, 1).to(d_out_dec.dtype)
+                    d_out_dec = d_out_dec * d_route
             elif s_kv is not None and sx == 1:
                 # 增量单步（O(1) 解码，sum 写入）：S ← a·S + k̂⊗k̂；r = q·S
                 a_step = torch.exp(log_a[..., 0])                       # (B,H)
@@ -938,7 +964,8 @@ class DecoderLayer(torch.nn.Module):
                  kv_ogate=False, kv_v_dim=None, use_read=False, dm_state=False,
                  kv_decay_spread=False, kv_decay_spread_lo=0.90, kv_decay_spread_hi=0.999,
                  kv_gamma=False, kv_gamma_init=1.0, pos_mod=False, layer_idx=0, num_layers=1,
-                 kv_decay_grad=False, dm_gate=False):
+                 kv_decay_grad=False, dm_gate=False,
+                 dm_dynroute=False, dm_qnorm=False):
         super(DecoderLayer, self).__init__()
         self.read = ReadChannel(hidden_size) if use_read else None
         self.self_attention_linear = MaxStateSuper(hidden_size, num_heads, voc_size, model_flag,
@@ -966,7 +993,9 @@ class DecoderLayer(torch.nn.Module):
                                                     layer_idx=layer_idx,
                                                     num_layers=num_layers,
                                                     kv_decay_grad=kv_decay_grad,
-                                                    dm_gate=dm_gate)
+                                                    dm_gate=dm_gate,
+                                                    dm_dynroute=dm_dynroute,
+                                                    dm_qnorm=dm_qnorm)
         if em_ref is not None:
             # v4.0: FFN 由 em 变换得到（fused CE/解码等其余路径不变）
             fh = ffn_hidden or hidden_size
@@ -1115,7 +1144,7 @@ class OpenASH_V3(torch.nn.Module):
                  dm_state=False, kv_decay_spread=False, kv_decay_spread_lo=0.90,
                  kv_decay_spread_hi=0.999, kv_gamma=False,
                  kv_gamma_init=1.0, pos_mod=False, kv_decay_grad=False,
-                 dm_gate=False):
+                 dm_gate=False, dm_dynroute=False, dm_qnorm=False):
         super(OpenASH_V3, self).__init__()
         self.max_seq_len = max_seq_len
         self.ce_chunk = ce_chunk
@@ -1157,7 +1186,9 @@ class OpenASH_V3(torch.nn.Module):
                           pos_mod=pos_mod,
                           layer_idx=i, num_layers=num_layers,
                           kv_decay_grad=kv_decay_grad,
-                          dm_gate=dm_gate)
+                          dm_gate=dm_gate,
+                          dm_dynroute=dm_dynroute,
+                          dm_qnorm=dm_qnorm)
              for i in range(num_layers)])
         self.final_norm = RMSNorm(hidden_size) if pre_norm else None
         self.em_weights_tied = em_weights
