@@ -1,0 +1,10 @@
+   prefill 128 后                                allocated   789.2 MB
+   A) run 式(保留 logits + 每16步同步) 64 步            allocated   786.5 MB
+   B) run 式(保留 logits, 不同步) 64 步                allocated   786.5 MB
+   C) O(1) 式(丢 logits, 不同步) 64 步                allocated   786.5 MB
+      C 之后 synchronize                          allocated   786.5 MB
+   D) O(1) 式再 16 步                              allocated   786.5 MB
+   E) 做一次 64-token prefill 后                    allocated   474.6 MB
+   F) O(1) 式但每步同步 64 步                          allocated   469.6 MB
+   G) 绑定到 lg（不 append, 不同步）64 步                 allocated   475.4 MB
+PROBE2 DONE
